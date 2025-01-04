@@ -204,7 +204,7 @@ class Economy(commands.Cog, name="Economy"):
         final = [random.choice(["X", "O", "Q"]) for _ in range(3)]
         await ctx.send(str(final))
         if final[0] == final[1] and final[1] == final[2]:
-            await self.update_bank(ctx.author, 2 * amount)
+            await self.update_bank(ctx.author, 5 * amount)
             await ctx.send("Vyhrál jsi")
         else:
             await self.update_bank(ctx.author, -amount)

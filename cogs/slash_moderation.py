@@ -23,6 +23,7 @@ class SlashModeration(commands.Cog):
         with open(WARNINGS_FILE, "w") as f:
             json.dump(self.warnings, f)
 
+    #ban
     @app_commands.command(name="ban", description="Zabanuje uživatele z důvodu")
     @app_commands.checks.has_permissions(ban_members=True)
     async def ban(self, interaction: discord.Interaction, member: discord.Member, reason: str = "Neuveden"):
@@ -31,12 +32,27 @@ class SlashModeration(commands.Cog):
         await member.ban(reason=reason)
         await interaction.response.send_message(f"{member.mention} byl zabanován. Důvod: {reason}")
 
+    #kick
     @app_commands.command(name="kick", description="Vyhodí uživatele z důvodu")
     @app_commands.checks.has_permissions(kick_members=True)
     async def kick(self, interaction: discord.Interaction, member: discord.Member, reason: str = "Neuveden"):
         await member.kick(reason=reason)
         await interaction.response.send_message(f"{member.mention} byl vyhozen. Důvod: {reason}")
 
+    # Unmute
+    @app_commands.command(name="unmute", description="Odebereš mute uživately")
+    @app_commands.checks.has_permissions(manage_messages=True)
+    async def unmute(self, interaction: discord.Interaction, member: discord.Member):
+        guild = interaction.guild
+        muted_role = discord.utils.get(guild.roles, name="Muted")
+
+        if muted_role not in member.roles:
+            return await interaction.response.send_message(f"{member.mention} není umlčen.", ephemeral=True)
+
+        await member.remove_roles(muted_role)
+        await interaction.response.send_message(f"{member.mention} byl odmlčen.")
+
+    #mute
     @app_commands.command(name="mute", description="Umlčí uživatele")
     @app_commands.checks.has_permissions(manage_messages=True)
     async def mute(self, interaction: discord.Interaction, member: discord.Member, duration: str, reason: str = "Neuveden"):
@@ -70,6 +86,53 @@ class SlashModeration(commands.Cog):
         except ValueError:
             await interaction.response.send_message("Nesprávně zadaný čas!", ephemeral=True)
 
+    # Set prefix
+    @app_commands.command(name="setprefix", description="Nastaví prefix bota")
+    @app_commands.checks.has_permissions(manage_messages=True)
+    async def setprefix(self, interaction: discord.Interaction, prefix: str):
+        guild_id = str(interaction.guild.id)
+        
+        if os.path.exists(PREFIX_FILE):
+            with open(PREFIX_FILE, "r") as f:
+                prefixes = json.load(f)
+        else:
+            prefixes = {}
+
+        prefixes[guild_id] = prefix
+
+        with open(PREFIX_FILE, "w") as f:
+            json.dump(prefixes, f, indent=4)
+
+        await interaction.response.send_message(f"Prefix nastaven na: {prefix}")
+
+    # Purge
+    @app_commands.command(name="purge", description="Vymaže určité množství zpráv")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def purge(self, interaction: discord.Interaction, limit: int):
+        if limit < 1 or limit > 100:
+            return await interaction.response.send_message("Počet zpráv k vymazání musí být mezi 1 a 100.", ephemeral=True)
+        
+        await interaction.channel.purge(limit=limit)
+        await interaction.response.send_message(f"Vymazáno {limit} zpráv.")
+
+    # Sudo
+    @app_commands.command(name="sudo", description="Childe napíše tvoji zprávu")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def sudo(self, interaction: discord.Interaction, message: str):
+        await interaction.response.send_message(message)
+        await interaction.delete_original_message()
+
+    # Unban
+    @app_commands.command(name="unban", description="Odebereš zákaz uživately")
+    @app_commands.checks.has_permissions(ban_members=True)
+    async def unban(self, interaction: discord.Interaction, member: discord.User, reason: str = "Neuveden"):
+        try:
+            await interaction.guild.unban(member, reason=reason)
+            await interaction.response.send_message(f"{member} byl odbannut. Důvod: {reason}")
+        except discord.NotFound:
+            await interaction.response.send_message("Tento uživatel není zabanován.", ephemeral=True)
+
+    #warn
     @app_commands.command(name="warn", description="Varuje uživatele z důvodu")
     @app_commands.checks.has_permissions(administrator=True)
     async def warn(self, interaction: discord.Interaction, member: discord.Member, reason: str):
@@ -86,6 +149,7 @@ class SlashModeration(commands.Cog):
         self.save_warnings()
         await interaction.response.send_message(f"{member.mention} byl varován. Důvod: {reason}")
 
+    #warnings
     @app_commands.command(name="warnings", description="Zobrazí varování uživatele")
     @app_commands.checks.has_permissions(administrator=True)
     async def warnings(self, interaction: discord.Interaction, member: discord.Member):
@@ -104,11 +168,17 @@ class SlashModeration(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
+
     @ban.error
     @kick.error
     @mute.error
     @warn.error
     @warnings.error
+    @purge.error
+    @setprefix.error
+    @sudo.error
+    @unban.error
+    @unmute.error
     async def permissions_error(self, interaction: discord.Interaction, error):
         if isinstance(error, app_commands.MissingPermissions):
             await interaction.response.send_message("Nemáte oprávnění použít tento příkaz.", ephemeral=True)

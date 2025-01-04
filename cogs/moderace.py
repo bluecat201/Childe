@@ -129,14 +129,22 @@ class Moderace(commands.Cog):
     async def setprefix(self, ctx, *, prefix=None):
         if not prefix:
             return await ctx.send("Musíte zadat nový prefix.")
-        
-        guild_id = ctx.guild.id
-        with open(PREFIX_FILE, "r") as f:
-            prefixes = json.load(f)
-        
+
+        guild_id = str(ctx.guild.id)  # Ukládáme ID jako string
+
+        # Načíst existující prefixy
+        if os.path.exists(PREFIX_FILE):
+            with open(PREFIX_FILE, "r") as f:
+                prefixes = json.load(f)
+        else:
+            prefixes = {}
+
+        # Přepsání nebo přidání prefixu
         prefixes[guild_id] = prefix
+
+        # Uložení zpět do souboru
         with open(PREFIX_FILE, "w") as f:
-            json.dump(prefixes, f)
+            json.dump(prefixes, f, indent=4)  # Použijte indentaci pro přehlednější JSON
 
         await ctx.send(f"Prefix nastaven na: {prefix}")
     
