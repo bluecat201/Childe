@@ -10,7 +10,6 @@ from discord import app_commands
 from discord.ext.commands import MissingPermissions
 import aiofiles
 
-
 DEFAULT_PREFIX = "!"
 PREFIX_FILE = "prefixes.json"
 WARNINGS_FILE = "warnings.json"
@@ -23,14 +22,22 @@ else:
     custom_prefixes = {}
 
 async def determine_prefix(bot, message):
-    guild = message.guild
-    if guild and guild.id in custom_prefixes:
-        return custom_prefixes[guild.id]
-    return DEFAULT_PREFIX
+    if not message.guild: 
+        return DEFAULT_PREFIX
+
+    guild_id = str(message.guild.id)
+    
+    # Načtení prefixů
+    if os.path.exists(PREFIX_FILE):
+        with open(PREFIX_FILE, "r") as f:
+            prefixes = json.load(f)
+    else:
+        prefixes = {}
+
+    # Vrátí uložený prefix nebo výchozí, pokud neexistuje
+    return prefixes.get(guild_id, DEFAULT_PREFIX)
 
 # Nastavení základních proměnných
-os.chdir("C:\\Users\\Elitebook\\Desktop\\Childe\\Childe-DMP")
-
 intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
@@ -45,7 +52,7 @@ async def on_ready():
     print(f'Bot ID: {bot.user.id}')
     await sync_commands(bot)
     await load_extensions()
-    await bot.change_presence(activity=discord.Streaming(name='Beta v0.2.6', url='https://www.twitch.tv/Bluecat201'))
+    await bot.change_presence(activity=discord.Streaming(name='Beta v0.2.7', url='https://www.twitch.tv/Bluecat201'))
 
 # Funkce pro načtení všech extensions
 async def load_extensions():
@@ -87,7 +94,6 @@ async def rps(interaction: discord.Interaction, option: app_commands.Choice[str]
     }
     await interaction.response.send_message(outcomes[(option.value, pc)])
 
-
 # Slash příkaz: Odkazy
 @bot.tree.command(name="link", description="Moje odkazy")
 @app_commands.choices(option=[
@@ -106,18 +112,11 @@ with open("config.json", "r") as file:
     TOKEN = config["token"]
 
 #|non-slash|  
-#NORMAL COMMANDS
-#bluecat
+# NORMAL COMMANDS
 @bot.command(aliases=['Bluecat','BLUECAT'])
 async def bluecat(ctx):
-    nah = random.randint(1,20)
-    await ctx.message.delete()
-    embed=discord.Embed(color=0x0B0B45)
-    file = discord.File(f"C:/Users/Elitebook/Desktop/Childe/Childe-DMP/bluecat/{nah}.gif", filename=f"image.gif")
-    embed.set_image(url=f"attachment://image.gif")
-    await ctx.send(file=file, embed=embed)
+    await ctx.send("Není femboy")
 
-#d
 @bot.command()
 async def d(ctx):
     await ctx.send("<:cicisrdicko:849285560832360531>")
@@ -126,7 +125,7 @@ async def d(ctx):
 #info
 @bot.command(aliases=['Info','INFO'])
 async def info(ctx):
-    await ctx.send(f"Bot vznikal jako moje dlouhodobá maturitní práce :)\nDatum vydání první alpha verze: 5.9.2021 \nDatum vydání první beta verze: 30.9.2021\nNaprogramováno v pythonu \nPokud máte jakékoliv poznámky, rady či nápady pro bota, můžete je napsat na !support server. ;)\nPočet serverů, na kterých jsem: {len(bot.guilds)}\nVerze bota: Beta 0.2.6 \nDeveloper: Bluecat201")
+    await ctx.send(f"Bot vznikal jako moje dlouhodobá maturitní práce :)\nDatum vydání první alpha verze: 5.9.2021 \nDatum vydání první beta verze: 30.9.2021\nNaprogramováno v pythonu \nPokud máte jakékoliv poznámky, rady či nápady pro bota, můžete je napsat na !support server. ;)\nPočet serverů, na kterých jsem: {len(bot.guilds)}\nVerze bota: Beta 0.2.7 \nDeveloper: Bluecat201")
 
 #invite bota
 @bot.command(aliases=['Invite','INVITE'])
