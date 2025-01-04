@@ -8,7 +8,6 @@ LEVELING_FILE = "leveling.json"
 IGNORED_CHANNELS_FILE = "ignored_channels.json"
 LEVEL_UP_CHANNELS_FILE = "level_up_channels.json"
 LEVELING_ENABLED_FILE = "leveling_enabled.json"
-MENTION_PREFS_FILE = "mention_prefs.json"
 
 # Načtení nebo inicializace dat
 if os.path.exists(LEVELING_FILE):
@@ -35,12 +34,6 @@ if os.path.exists(LEVELING_ENABLED_FILE):
 else:
     leveling_enabled = {}
 
-if os.path.exists(MENTION_PREFS_FILE):
-    with open(MENTION_PREFS_FILE, "r") as f:
-        mention_prefs = json.load(f)
-else:
-    mention_prefs = {}
-
 # Funkce pro uložení dat
 async def save_data(file_path, data):
     with open(file_path, "w") as f:
@@ -58,10 +51,13 @@ class Leveling(commands.Cog):
             leveling_data[guild_id_str] = {}
 
         if user_id_str not in leveling_data[guild_id_str]:
-            leveling_data[guild_id_str][user_id_str] = {"xp": 0, "level": 1}
+            leveling_data[guild_id_str][user_id_str] = {"xp": 0, "level": 1, "messages": 0, "total_xp": 0}
 
         user_data = leveling_data[guild_id_str][user_id_str]
+        user_data["messages"] += 1
+        user_data["total_xp"] += xp_to_add
         user_data["xp"] += xp_to_add
+
         xp = user_data["xp"]
         level = user_data["level"]
 
@@ -94,8 +90,7 @@ class Leveling(commands.Cog):
             level_up_channel_id = level_up_channels.get(guild_id, message.channel.id)
             level_up_channel = self.bot.get_channel(int(level_up_channel_id))
             if level_up_channel:
-                mention = message.author.mention if mention_prefs.get(str(message.author.id), True) else message.author.name
-                await level_up_channel.send(f"Gratulujeme, {mention}! Dosáhl(a) jsi úrovně {leveling_data[guild_id][str(message.author.id)]['level']}!")
+                await level_up_channel.send(f"Gratulujeme, {message.author.mention}! Dosáhl(a) jsi úrovně {leveling_data[guild_id][str(message.author.id)]['level']}!")
 
     @commands.group()
     @commands.has_permissions(administrator=True)
@@ -164,12 +159,12 @@ class Leveling(commands.Cog):
             await ctx.send("Nikdo zatím nezískal žádné XP.")
             return
 
-        sorted_users = sorted(leveling_data[guild_id].items(), key=lambda x: (x[1]['level'], x[1]['xp']), reverse=True)
+        sorted_users = sorted(leveling_data[guild_id].items(), key=lambda x: (x[1]['level'], x[1]['total_xp']), reverse=True)
         leaderboard_text = ""
 
         for i, (user_id, data) in enumerate(sorted_users[:10], 1):
             user = await self.bot.fetch_user(int(user_id))
-            leaderboard_text += f"{i}. {user.name}: Úroveň {data['level']} ({data['xp']} XP)\n"
+            leaderboard_text += f"{i}. {user.name}: Úroveň {data['level']} ({data['total_xp']} celkových XP, {data['messages']} zpráv)\n"
 
         embed = discord.Embed(title="Top 10 hráčů", description=leaderboard_text, color=discord.Color.blue())
         await ctx.send(embed=embed)
@@ -182,20 +177,9 @@ class Leveling(commands.Cog):
 
         if guild_id in leveling_data and user_id in leveling_data[guild_id]:
             user_data = leveling_data[guild_id][user_id]
-            await ctx.send(f"{member.mention} má úroveň {user_data['level']} a {user_data['xp']} XP.")
+            await ctx.send(f"{member.mention} má úroveň {user_data['level']}, {user_data['total_xp']} celkových XP a poslal(a) {user_data['messages']} zpráv.")
         else:
             await ctx.send(f"{member.mention} zatím nemá žádnou úroveň ani XP.")
 
-    @commands.command()
-    async def toggle_mention(self, ctx):
-        user_id = str(ctx.author.id)
-        current_pref = mention_prefs.get(user_id, True)
-        mention_prefs[user_id] = not current_pref
-        await save_data(MENTION_PREFS_FILE, mention_prefs)
-
-        state_message = "zapnuto" if mention_prefs[user_id] else "vypnuto"
-        await ctx.send(f"Označení při zvýšení úrovně bylo nyní {state_message}.")
-
 async def setup(bot):
     await bot.add_cog(Leveling(bot))
-
