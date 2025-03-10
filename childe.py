@@ -52,7 +52,7 @@ GUILD_ID = 535890114258141184
 TWITCH_CHANNEL = "bluecat201"  # Twitch kanál, který chcete sledovat
 ANNOUNCEMENT_CHANNEL_ID = 592348081362829312  # ID kanálu, kde chcete oznámení
 CLIENT_ID = "hkn3fxk347cduph95gem7n22u2xod9"
-CLIENT_SECRET = "wf4j6ts074b94qvp2z44e7d4aha3e6"
+CLIENT_SECRET = ""
 YOUR_USER_ID = 443842350377336860
 
 #twitch announcement
