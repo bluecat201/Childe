@@ -8,6 +8,7 @@ LEVELING_FILE = "leveling.json"
 IGNORED_CHANNELS_FILE = "ignored_channels.json"
 LEVEL_UP_CHANNELS_FILE = "level_up_channels.json"
 LEVELING_ENABLED_FILE = "leveling_enabled.json"
+MENTION_PREFS_FILE = "mention_prefs.json"
 
 # Načtení nebo inicializace dat
 if os.path.exists(LEVELING_FILE):
@@ -33,6 +34,12 @@ if os.path.exists(LEVELING_ENABLED_FILE):
         leveling_enabled = json.load(f)
 else:
     leveling_enabled = {}
+
+if os.path.exists(MENTION_PREFS_FILE):
+    with open(MENTION_PREFS_FILE, "r") as f:
+        mention_prefs = json.load(f)
+else:
+    mention_prefs = {}
 
 # Funkce pro uložení dat
 async def save_data(file_path, data):
@@ -89,8 +96,15 @@ class Leveling(commands.Cog):
         if leveled_up:
             level_up_channel_id = level_up_channels.get(guild_id, message.channel.id)
             level_up_channel = self.bot.get_channel(int(level_up_channel_id))
+            
             if level_up_channel:
-                await level_up_channel.send(f"Gratulujeme, {message.author.mention}! Dosáhl(a) jsi úrovně {leveling_data[guild_id][str(message.author.id)]['level']}!")
+                user_id_str = str(message.author.id)
+                mention_user = mention_prefs.get(user_id_str, True)  # Zkontroluje, zda je mention povolen
+                mention_text = message.author.mention if mention_user else message.author.name
+
+                await level_up_channel.send(
+                    f"Gratulujeme, {mention_text}! Dosáhl(a) jsi úrovně {leveling_data[guild_id][user_id_str]['level']}!"
+                )
 
     @commands.group()
     @commands.has_permissions(administrator=True)
@@ -181,5 +195,16 @@ class Leveling(commands.Cog):
         else:
             await ctx.send(f"{member.mention} zatím nemá žádnou úroveň ani XP.")
 
+    @commands.command()
+    async def toggle_mention(self, ctx):
+        user_id = str(ctx.author.id)
+        current_pref = mention_prefs.get(user_id, True)
+        mention_prefs[user_id] = not current_pref
+        await save_data(MENTION_PREFS_FILE, mention_prefs)
+
+        state_message = "zapnuto" if mention_prefs[user_id] else "vypnuto"
+        await ctx.send(f"Označení při zvýšení úrovně bylo nyní {state_message}.")
+
 async def setup(bot):
     await bot.add_cog(Leveling(bot))
+

@@ -11,9 +11,9 @@ class Economy(commands.Cog, name="Economy"):
 
     # Example shop
     mainshop = [
-        {"name": "Hodinky", "price": 100, "description": "Prostě hodinky"},
-        {"name": "Laptop", "price": 1000, "description": "Laptop, co víc chceš vědět"},
-        {"name": "PC", "price": 10000, "description": "Počítač na hraní her"}
+        {"name": "Watches", "price": 100, "description": "Just watches"},
+        {"name": "Notebook", "price": 1000, "description": "Notebook, what else do you want to know?"},
+        {"name": "PC", "price": 10000, "description": "PC for playing games"}
     ]
 
     # Helper function for getting bank data
@@ -82,7 +82,7 @@ class Economy(commands.Cog, name="Economy"):
 
 
     #Balance
-    @commands.command(aliases=['bal'], help="Ukáže stav tvého účtu")
+    @commands.command(aliases=['bal'], help="It will show the status of your account")
     async def balance(self, ctx, member: discord.Member = None):
         await self.open_account(ctx.author if member is None else member)
         user = ctx.author if member is None else member
@@ -90,12 +90,12 @@ class Economy(commands.Cog, name="Economy"):
         wallet_amt = users[str(user.id)]["wallet"]
         bank_amt = users[str(user.id)]["bank"]
         em = discord.Embed(title=f"{user.name}'s balance", color=discord.Color.red())
-        em.add_field(name="Peněženka", value=wallet_amt)
-        em.add_field(name="Banka", value=bank_amt)
+        em.add_field(name="Wallet", value=wallet_amt)
+        em.add_field(name="Bank", value=bank_amt)
         await ctx.send(embed=em)
 
     #Begging
-    @commands.command(aliases=['BEG', 'Beg'], help="Budeš žebrat o peníze")
+    @commands.command(aliases=['BEG', 'Beg'], help="You will beg for money")
     @commands.cooldown(1, 3600, commands.BucketType.user)
     async def beg(self, ctx):
         try:
@@ -103,54 +103,54 @@ class Economy(commands.Cog, name="Economy"):
             users = await self.get_bank_data()
             user = ctx.author
             earnings = random.randrange(101)
-            await ctx.send(f"Někdo ti dal {earnings} korun!!")
+            await ctx.send(f"Somebody give you {earnings} money!!")
             users[str(user.id)]["wallet"] += earnings
             with open("mainbank.json", "w") as f:
                 json.dump(users, f)
         except CommandOnCooldown as e:
             remaining_time = round(e.retry_after)  # Get the remaining time in seconds
             minutes, seconds = divmod(remaining_time, 60)
-            await ctx.send(f"Ještě musíš počkat {minutes} minut a {seconds} sekund, než budeš moct žebrat znovu.")
+            await ctx.send(f"You still must to wait {minutes} minute and {seconds} seconds before you can beg again.")
 
     #withdraw
-    @commands.command(aliases=['with'], help="Vybereš si určtý počet peněz z banky")
+    @commands.command(aliases=['with'], help="You withdraw a certain amount of money from the bank")
     async def withdraw(self, ctx, amount: int = None):
         await self.open_account(ctx.author)
         if amount is None:
-            await ctx.send("Prosím zadejte množství")
+            await ctx.send("Please enter the quantity")
             return
         bal = await self.update_bank(ctx.author)
         if amount > bal[1]:
-            await ctx.send("Nemáte tolik peněz v bance")
+            await ctx.send("You don't have that much money in the bank")
             return
         if amount < 0:
-            await ctx.send("Hodnota nemůže být záporná")
+            await ctx.send("The value cannot be negative")
             return
         await self.update_bank(ctx.author, amount)
         await self.update_bank(ctx.author, -amount, "bank")
-        await ctx.send(f"Vybral jsi {amount} peněz")
+        await ctx.send(f"You have withdrawn {amount} of money")
 
     # Give command
-    @commands.command(aliases=['Give', 'GIVE'], help="Dáš někomu určitý počet peněz")
+    @commands.command(aliases=['Give', 'GIVE'], help="You give someone a certain amount of money")
     async def give(self, ctx, member: discord.Member, amount: int = None):
         await self.open_account(ctx.author)
         await self.open_account(member)
         if amount is None:
-            await ctx.send("Prosím zadejte množství")
+            await ctx.send("Please enter the quantity")
             return
         bal = await self.update_bank(ctx.author)
         if amount > bal[1]:
-            await ctx.send("Nemáte tolik peněz")
+            await ctx.send("You don't have that much money")
             return
         if amount < 0:
-            await ctx.send("Hodnota nemůže být záporná")
+            await ctx.send("The value cannot be negative")
             return
         await self.update_bank(ctx.author, -amount, "bank")
         await self.update_bank(member, amount, "bank")
-        await ctx.send(f"Dal jsi {amount} peněz")
+        await ctx.send(f"You give {amount} money")
 
     # Rob command
-    @commands.command(aliases=['ROB', 'Rob'], help="Pokus se někoho okrást")
+    @commands.command(aliases=['ROB', 'Rob'], help="Try to rob someone")
     @commands.cooldown(1, 60, commands.BucketType.user)
     async def rob(self, ctx, member: discord.Member):
         try:
@@ -158,60 +158,60 @@ class Economy(commands.Cog, name="Economy"):
             await self.open_account(member)
             bal = await self.update_bank(member)
             if bal[0] < 100:
-                await ctx.send("Nevyplatí se to")
+                await ctx.send("It's not worth it")
                 return
             earnings = random.randrange(0, bal[0])
             await self.update_bank(ctx.author, earnings)
             await self.update_bank(member, -earnings)
-            await ctx.send(f"Kradl jsi a získal jsi {earnings} peněz")
+            await ctx.send(f"You stole and got {earnings} of money")
         except CommandOnCooldown as e:
             remaining_time = round(e.retry_after)  # Získá zbývající čas v sekundách
             minutes, seconds = divmod(remaining_time, 60)
-            await ctx.send(f"Ještě musíš počkat {minutes} minut a {seconds} sekund, než budeš moct krást znovu.")
+            await ctx.send(f"You still have to wait {minutes} minutes and {seconds} seconds before you can steal again.")
     
     # Deposit command
-    @commands.command(aliases=['dep'], help="Ulož určité množství peněz do banky")
+    @commands.command(aliases=['dep'], help="Deposit a certain amount of money in the bank")
     async def deposit(self, ctx, amount: int = None):
         await self.open_account(ctx.author)
         if amount is None:
-            await ctx.send("Prosím zadejte množství")
+            await ctx.send("Please enter the quantity")
             return
         bal = await self.update_bank(ctx.author)
         if amount > bal[0]:
-            await ctx.send("Nemáte tolik peněz")
+            await ctx.send("You don't have that much money")
             return
         if amount < 0:
-            await ctx.send("Hodnota nemůže být záporná")
+            await ctx.send("The value cannot be negative")
             return
         await self.update_bank(ctx.author, -amount)
         await self.update_bank(ctx.author, amount, "bank")
-        await ctx.send(f"Uložil jsi {amount} peněz")
+        await ctx.send(f"You have deposited {amount} of money")
 
     # Slots command
-    @commands.command(aliases=['Slots'], help="Vsadit určitý počet peněz na automaty")
+    @commands.command(aliases=['Slots'], help="Bet a certain amount of money on slots")
     async def slots(self, ctx, amount: int = None):
         await self.open_account(ctx.author)
         if amount is None:
-            await ctx.send("Prosím zadejte množství")
+            await ctx.send("Please enter the quantity")
             return
         bal = await self.update_bank(ctx.author)
         if amount > bal[0]:
-            await ctx.send("Nemáte tolik peněz")
+            await ctx.send("You don't have that much money")
             return
         if amount < 0:
-            await ctx.send("Hodnota nemůže být záporná")
+            await ctx.send("The value cannot be negative")
             return
         final = [random.choice(["X", "O", "Q"]) for _ in range(3)]
         await ctx.send(str(final))
         if final[0] == final[1] and final[1] == final[2]:
-            await self.update_bank(ctx.author, 5 * amount)
-            await ctx.send("Vyhrál jsi")
+            await self.update_bank(ctx.author, 3 * amount)
+            await ctx.send("You won")
         else:
             await self.update_bank(ctx.author, -amount)
-            await ctx.send("Prohrál jsi")
+            await ctx.send("You lose")
 
     # Shop command
-    @commands.command(aliases=['Shop'],help="Podívej se co si můžeš koupit v obchodě")
+    @commands.command(aliases=['Shop'],help="See what you can buy in the store")
     async def shop(self, ctx):
         em = discord.Embed(title="Shop")
         for item in self.mainshop:
@@ -222,18 +222,20 @@ class Economy(commands.Cog, name="Economy"):
         await ctx.send(embed=em)
 
     # Buy command
-    @commands.command(aliases=['Buy'], help="Kup si danou věc z obchodu")
+    @commands.command(aliases=['Buy'], help="Buy the item from the store")
     async def buy(self, ctx, item: str, amount: int = 1):
         await self.open_account(ctx.author)
         res = await self.buy_this(ctx.author, item, amount)
         if not res[0]:
             if res[1] == 1:
-                await ctx.send("Tento předmět nemáme")
+                await ctx.send("We do not have this item")
             elif res[1] == 2:
-                await ctx.send(f"Nemáš dostatek peněz v peněžence aby si koupil {amount} {item}")
+                await ctx.send(f"You don't have enough money in your wallet to buy {amount} {item}")
+        else:
+            await ctx.send(f"You bought {amount} {item}")
 
     # Bag command
-    @commands.command(aliases=['Bag'],help="Podívej se co vlastníš")
+    @commands.command(aliases=['Bag'],help="Look what you own")
     async def bag(self, ctx):
         await self.open_account(ctx.author)
         user = ctx.author

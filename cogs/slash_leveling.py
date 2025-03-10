@@ -117,12 +117,12 @@ class LevelingSlash(commands.Cog):
             await interaction.response.send_message("Nikdo zatím nezískal žádné XP.")
             return
 
-        sorted_users = sorted(leveling_data[guild_id].items(), key=lambda x: (x[1]['level'], x[1]['xp']), reverse=True)
+        sorted_users = sorted(leveling_data[guild_id].items(), key=lambda x: (x[1]['level'], x[1]['total_xp']), reverse=True)
         leaderboard_text = ""
 
         for i, (user_id, data) in enumerate(sorted_users[:10], 1):
             user = await self.bot.fetch_user(int(user_id))
-            leaderboard_text += f"{i}. {user.name}: Úroveň {data['level']} ({data['xp']} XP)\n"
+            leaderboard_text += f"{i}. {user.name}: Úroveň {data['level']} ({data['total_xp']} celkových XP, {data['messages']} zpráv)\n"
 
         embed = discord.Embed(title="Top 10 hráčů", description=leaderboard_text, color=discord.Color.blue())
         await interaction.response.send_message(embed=embed)
@@ -135,7 +135,7 @@ class LevelingSlash(commands.Cog):
 
         if guild_id in leveling_data and user_id in leveling_data[guild_id]:
             user_data = leveling_data[guild_id][user_id]
-            await interaction.response.send_message(f"{member.mention} má úroveň {user_data['level']} a {user_data['xp']} XP.")
+            await interaction.response.send_message(f"{member.mention} má úroveň {user_data['level']}, {user_data['total_xp']} celkových XP a poslal(a) {user_data['messages']} zpráv.")
         else:
             await interaction.response.send_message(f"{member.mention} zatím nemá žádnou úroveň ani XP.")
 

@@ -185,7 +185,7 @@ class SlashRoleplay(commands.Cog):
 
     #shrug
     @app_commands.command(name="shrug", description="Krčíš rameny.")
-    async def blush(self, interaction: discord.Interaction):
+    async def shrug(self, interaction: discord.Interaction):
         description = f"{interaction.user.mention} krčí rameny"
         embed = await self.fetch_neko_action(description, "shrug")
         if embed:
