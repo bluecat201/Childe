@@ -9,6 +9,10 @@ from discord.ui import Button, View
 from discord import app_commands
 from discord.ext.commands import MissingPermissions
 import aiofiles
+import requests
+from datetime import datetime
+from gemini_api import ChatSession
+
 
 DEFAULT_PREFIX = "!"
 PREFIX_FILE = "prefixes.json"
@@ -37,7 +41,6 @@ async def determine_prefix(bot, message):
     # Vrátí uložený prefix nebo výchozí, pokud neexistuje
     return prefixes.get(guild_id, DEFAULT_PREFIX)
 
-# Nastavení základních proměnných
 intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
@@ -45,14 +48,96 @@ intents.members = True
 
 bot = commands.Bot(command_prefix=determine_prefix, intents=intents)
 
+GUILD_ID = 535890114258141184 
+TWITCH_CHANNEL = "bluecat201"  # Twitch kanál, který chcete sledovat
+ANNOUNCEMENT_CHANNEL_ID = 592348081362829312  # ID kanálu, kde chcete oznámení
+CLIENT_ID = "hkn3fxk347cduph95gem7n22u2xod9"
+CLIENT_SECRET = "wf4j6ts074b94qvp2z44e7d4aha3e6"
+YOUR_USER_ID = 443842350377336860
+
+#twitch announcement
+access_token = None
+is_stream_live = False
+
+async def get_access_token():
+    """Fetch a new access token from Twitch API."""
+    global access_token
+    url = "https://id.twitch.tv/oauth2/token"
+    params = {
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
+        "grant_type": "client_credentials"
+    }
+    response = requests.post(url, data=params)
+    if response.status_code == 200:
+        data = response.json()
+        access_token = data["access_token"]
+        print(f"New access token obtained at {datetime.now()}")
+    else:
+        print(f"Failed to get access token: {response.status_code} {response.text}")
+
+async def check_twitch(bot):
+    """Check if the specified Twitch channel is live and send a notification to Discord."""
+    global is_stream_live
+    url = f"https://api.twitch.tv/helix/streams?user_login={TWITCH_CHANNEL}"
+    headers = {
+        "Client-ID": CLIENT_ID,
+        "Authorization": f"Bearer {access_token}"
+    }
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, headers=headers) as response:
+            if response.status == 200:
+                data = await response.json()
+                if data.get("data"):
+                    if not is_stream_live:
+                        is_stream_live = True
+                        guild = bot.get_guild(GUILD_ID)
+                        if not guild:
+                            print(f"Guild with ID {GUILD_ID} not found.")
+                            return
+
+                        channel = guild.get_channel(ANNOUNCEMENT_CHANNEL_ID)
+                        if not channel:
+                            print(f"Channel with ID {ANNOUNCEMENT_CHANNEL_ID} not found.")
+                            return
+
+                        stream_info = data["data"][0]
+                        title = stream_info.get("title", "")[0:100]
+                        game_name = stream_info.get("game_name", "Unknown")
+
+                        await channel.send(
+                            f"🎥 **{TWITCH_CHANNEL}** právě začal streamovat!\n"
+                            f"🎮 Hraje: {game_name}\n"
+                            f"📢 Titulek streamu: {title}\n"
+                            f"🔗 Sledujte na: https://www.twitch.tv/{TWITCH_CHANNEL}"
+                        )
+                else:
+                    if is_stream_live:
+                        is_stream_live = False
+                        print(f"{TWITCH_CHANNEL} stream has ended at {datetime.now()}.")
+            else:
+                print(f"Failed to fetch Twitch stream data: {response.status}")
+
+async def start_twitch_monitor(bot):
+    """Periodically check Twitch stream status."""
+    await get_access_token()
+    while True:
+        try:
+            await check_twitch(bot)
+        except Exception as e:
+            print(f"Error while checking Twitch: {e}")
+        await asyncio.sleep(300)  # Check every 5 minutes
+
 # Event: Bot je připraven
 @bot.event
 async def on_ready():
     print(f'Connected to bot: {bot.user.name}')
     print(f'Bot ID: {bot.user.id}')
-    await sync_commands(bot)
     await load_extensions()
-    await bot.change_presence(activity=discord.Streaming(name='Beta v0.2.7', url='https://www.twitch.tv/Bluecat201'))
+    await sync_commands(bot)
+    await bot.change_presence(activity=discord.Streaming(name='Beta 0.3.0', url='https://www.twitch.tv/Bluecat201'))
+    start_twitch_monitor(bot)
+    print(f'Bot sleduje Twitch')
 
 # Funkce pro načtení všech extensions
 async def load_extensions():
@@ -73,35 +158,35 @@ async def sync_commands(bot):
             print(f"Chyba při synchronizaci příkazů pro {guild.name}: {e}")
 
 # Slash příkaz: Kámen, nůžky, papír
-@bot.tree.command(name="rps", description="Zahraj si kámen, nůžky, papír")
+@bot.tree.command(name="rps", description="Play rock, paper, scissors")
 @app_commands.choices(option=[
-    app_commands.Choice(name="Kámen", value="1"),
-    app_commands.Choice(name="Nůžky", value="2"),
-    app_commands.Choice(name="Papír", value="3"),
+    app_commands.Choice(name="Rock", value="1"),
+    app_commands.Choice(name="Scissors", value="2"),
+    app_commands.Choice(name="Paper", value="3"),
 ])
 async def rps(interaction: discord.Interaction, option: app_commands.Choice[str]):
     pc = random.randint(1, 3)
     outcomes = {
-        ("1", 1): "Kámen vs Kámen\n REMÍZA",
-        ("1", 2): "Kámen vs Nůžky\n VYHRÁL JSI",
-        ("1", 3): "Kámen vs Papír\n PROHRÁL JSI",
-        ("2", 1): "Nůžky vs Kámen\n PROHRÁL JSI",
-        ("2", 2): "Nůžky vs Nůžky\n REMÍZA",
-        ("2", 3): "Nůžky vs Papír\n VYHRÁL JSI",
-        ("3", 1): "Papír vs Kámen\n VYHRÁL JSI",
-        ("3", 2): "Papír vs Nůžky\n PROHRÁL JSI",
-        ("3", 3): "Papír vs Papír\n REMÍZA",
+        ("1", 1): "Rock vs Rock\n DRAW",
+        ("1", 2): "Rock vs Scissors\n YOU WON",
+        ("1", 3): "Rock vs Paper\n YOU LOSE",
+        ("2", 1): "Scissors vs Rock\n YOU LOSE",
+        ("2", 2): "Scissors vs Scissors\n DRAW",
+        ("2", 3): "Scissors vs Paper\n YOU WON",
+        ("3", 1): "Paper vs Rock\n YOU WON",
+        ("3", 2): "Paper vs Scissors\n YOU LOSE",
+        ("3", 3): "Paper vs Paper\n DRAW",
     }
     await interaction.response.send_message(outcomes[(option.value, pc)])
 
 # Slash příkaz: Odkazy
-@bot.tree.command(name="link", description="Moje odkazy")
+@bot.tree.command(name="links", description="My socials")
 @app_commands.choices(option=[
-    app_commands.Choice(name="Twitch", value="Můj twitch: https://www.twitch.tv/bluecat201"),
-    app_commands.Choice(name="Support", value="Zde najdete moji podporu: https://dsc.gg/bluecat | https://discord.gg/43H2HxB3Ax"),
-    app_commands.Choice(name="Youtube", value="hl. kanál: https://www.youtube.com/channel/UCwY2CDHkQGmCIwgVgEJKt8w"),
-    app_commands.Choice(name="Instagram", value="Můj IG: https://www.instagram.com/bluecat221/"),
-    app_commands.Choice(name="Web", value="Můj web: https://bluecat201.weebly.com/"),
+    app_commands.Choice(name="Twitch", value="My twitch: https://www.twitch.tv/bluecat201"),
+    app_commands.Choice(name="Support", value="Here is my support server: https://discord.gg/QmB2Ang4vr"),
+    app_commands.Choice(name="Youtube", value="Main Channel: https://www.youtube.com/channel/UCwY2CDHkQGmCIwgVgEJKt8w"),
+    app_commands.Choice(name="Instagram", value="My IG: https://www.instagram.com/bluecat221/"),
+    app_commands.Choice(name="Web", value="My website: https://bluecat201.weebly.com/"),
 ])
 async def link(interaction: discord.Interaction, option: app_commands.Choice[str]):
     await interaction.response.send_message(option.value)
@@ -112,25 +197,26 @@ with open("config.json", "r") as file:
     TOKEN = config["token"]
 
 #|non-slash|  
-# NORMAL COMMANDS
+#NORMAL COMMANDS
+#blackcat
+@bot.command(aliases=['Blackcat','BLACKCAT'])
+async def blackcat(ctx):
+    await ctx.send("Alive and lost")
+
+#bluecat
 @bot.command(aliases=['Bluecat','BLUECAT'])
 async def bluecat(ctx):
-    await ctx.send("Není femboy")
-
-@bot.command()
-async def d(ctx):
-    await ctx.send("<:cicisrdicko:849285560832360531>")
-
+    await ctx.send("Not femboy")
 
 #info
 @bot.command(aliases=['Info','INFO'])
 async def info(ctx):
-    await ctx.send(f"Bot vznikal jako moje dlouhodobá maturitní práce :)\nDatum vydání první alpha verze: 5.9.2021 \nDatum vydání první beta verze: 30.9.2021\nNaprogramováno v pythonu \nPokud máte jakékoliv poznámky, rady či nápady pro bota, můžete je napsat na !support server. ;)\nPočet serverů, na kterých jsem: {len(bot.guilds)}\nVerze bota: Beta 0.2.7 \nDeveloper: Bluecat201")
+    await ctx.send(f"The bot was created as my long-term graduation project \nRelease date of the first alpha version: 5.9.2021 \nRelease date of the first beta version: 30.9.2021\nProgrammed in python \nIf you have any comments, advice or ideas for the bot, you can write them on the support server. \nThe number of servers I'm on: {len(bot.guilds)}\nCurrent version: Beta 0.3.0 \nDeveloper: Bluecat201")
 
 #invite bota
 @bot.command(aliases=['Invite','INVITE'])
 async def invite(ctx):
-    await ctx.send("Zde je můj invite: https://discord.com/api/oauth2/authorize?client_id=883325865474269192&permissions=8&scope=bot%20applications.commands")
+    await ctx.send("Here is my invite: https://discord.com/api/oauth2/authorize?client_id=883325865474269192&permissions=8&scope=bot%20applications.commands")
 
 #ping
 @bot.command(aliases=['Ping','PING'])
@@ -140,12 +226,45 @@ async def ping(ctx):
 #support
 @bot.command(aliases=['Support','SUPPORT'])
 async def support(ctx):
-    await ctx.send("Zde najdete moji podporu: https://dsc.gg/bluecat | https://discord.gg/43H2HxB3Ax")
+    await ctx.send("Here is my support server: https://discord.gg/QmB2Ang4vr")
 
 #twitch
 @bot.command(aliases=['Twitch','TWITCH'])
 async def twitch(ctx):
-    await ctx.send("Zde je twitch mého stvořitele: https://www.twitch.tv/bluecat201")
+    await ctx.send("Here is developer twitch channel: https://www.twitch.tv/bluecat201")
+
+#response
+chat_session = ChatSession()
+
+@bot.event
+async def on_message(message):
+    IGNORED_CHANNELS = [648557196837388289]
+    # Don't let the bot respond to itself or other bots
+    if message.author.bot:
+        return
+    
+    # Ignorujte zprávy z konkrétních kanálů
+    if message.channel.id in IGNORED_CHANNELS:
+        return
+
+    # Check if the bot is mentioned
+    if bot.user.mentioned_in(message):
+        query = message.content.replace(f"<@!{bot.user.id}>", "").strip()  # Odstraní zmínku bota z obsahu zprávy
+        response = await chat_session.send_message(query)
+        await message.reply(response)
+
+    # Handle normal bot commands as well
+    await bot.process_commands(message)
+
+# Reset command (restricted to your user)
+@bot.command()
+async def reset(ctx):
+    if ctx.author.id != YOUR_USER_ID:
+        await ctx.send("This command can only be used by the owner of the bot.")
+        return
+
+    await ctx.send("Bot is reseting...")
+    await bot.close()
 
 #|výstup do konzole|
 
