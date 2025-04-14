@@ -49,10 +49,10 @@ intents.members = True
 bot = commands.Bot(command_prefix=determine_prefix, intents=intents)
 
 GUILD_ID = 535890114258141184 
-TWITCH_CHANNEL = "bluecat201"  # Twitch kanál, který chcete sledovat
+TWITCH_CHANNEL = "bluecatlive"  # Twitch kanál, který chcete sledovat
 ANNOUNCEMENT_CHANNEL_ID = 592348081362829312  # ID kanálu, kde chcete oznámení
-CLIENT_ID = "hkn3fxk347cduph95gem7n22u2xod9"
-CLIENT_SECRET = ""
+TWITCH_CLIENT_ID = "hkn3fxk347cduph95gem7n22u2xod9"
+TWITCH_CLIENT_SECRET = ""
 YOUR_USER_ID = 443842350377336860
 
 #twitch announcement
@@ -64,8 +64,8 @@ async def get_access_token():
     global access_token
     url = "https://id.twitch.tv/oauth2/token"
     params = {
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
+        "client_id": TWITCH_CLIENT_ID,
+        "client_secret": TWITCH_CLIENT_SECRET,
         "grant_type": "client_credentials"
     }
     response = requests.post(url, data=params)
@@ -81,7 +81,7 @@ async def check_twitch(bot):
     global is_stream_live
     url = f"https://api.twitch.tv/helix/streams?user_login={TWITCH_CHANNEL}"
     headers = {
-        "Client-ID": CLIENT_ID,
+        "Client-ID": TWITCH_CLIENT_ID,
         "Authorization": f"Bearer {access_token}"
     }
     async with aiohttp.ClientSession() as session:
@@ -135,7 +135,7 @@ async def on_ready():
     print(f'Bot ID: {bot.user.id}')
     await load_extensions()
     await sync_commands(bot)
-    await bot.change_presence(activity=discord.Streaming(name='Beta 0.3.0', url='https://www.twitch.tv/Bluecat201'))
+    await bot.change_presence(activity=discord.Streaming(name='Beta 0.3.0', url='https://www.twitch.tv/bluecatlive'))
     start_twitch_monitor(bot)
     print(f'Bot sleduje Twitch')
 
@@ -182,8 +182,8 @@ async def rps(interaction: discord.Interaction, option: app_commands.Choice[str]
 # Slash příkaz: Odkazy
 @bot.tree.command(name="links", description="My socials")
 @app_commands.choices(option=[
-    app_commands.Choice(name="Twitch", value="My twitch: https://www.twitch.tv/bluecat201"),
-    app_commands.Choice(name="Support", value="Here is my support server: https://discord.gg/QmB2Ang4vr"),
+    app_commands.Choice(name="Twitch", value="My twitch: https://www.twitch.tv/bluecatlive"),
+    app_commands.Choice(name="Support", value="Here is my support server: https://discord.gg/blueshock"),
     app_commands.Choice(name="Youtube", value="Main Channel: https://www.youtube.com/channel/UCwY2CDHkQGmCIwgVgEJKt8w"),
     app_commands.Choice(name="Instagram", value="My IG: https://www.instagram.com/bluecat221/"),
     app_commands.Choice(name="Web", value="My website: https://bluecat201.weebly.com/"),
@@ -226,12 +226,12 @@ async def ping(ctx):
 #support
 @bot.command(aliases=['Support','SUPPORT'])
 async def support(ctx):
-    await ctx.send("Here is my support server: https://discord.gg/QmB2Ang4vr")
+    await ctx.send("Here is my support server: https://discord.gg/blueshock")
 
 #twitch
 @bot.command(aliases=['Twitch','TWITCH'])
 async def twitch(ctx):
-    await ctx.send("Here is developer twitch channel: https://www.twitch.tv/bluecat201")
+    await ctx.send("Here is developer twitch channel: https://www.twitch.tv/bluecatlive")
 
 #response
 chat_session = ChatSession()
