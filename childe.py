@@ -10,13 +10,17 @@ from discord import app_commands
 from discord.ext.commands import MissingPermissions
 import aiofiles
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 from gemini_api import ChatSession
+from chatbot import AIChat
+import pytz 
 
 
 DEFAULT_PREFIX = "!"
 PREFIX_FILE = "prefixes.json"
 WARNINGS_FILE = "warnings.json"
+
+AI_PROVIDER = "Gemini"  # Gemini / DigitalOcean
 
 # Načítání prefixů ze souboru
 if os.path.exists(PREFIX_FILE):
@@ -49,8 +53,8 @@ intents.members = True
 bot = commands.Bot(command_prefix=determine_prefix, intents=intents)
 
 GUILD_ID = 535890114258141184 
-TWITCH_CHANNEL = "bluecat201"  # Twitch kanál, který chcete sledovat
-ANNOUNCEMENT_CHANNEL_ID = 592348081362829312  # ID kanálu, kde chcete oznámení
+TWITCH_CHANNEL = "bluecatlive"
+ANNOUNCEMENT_CHANNEL_ID = 592348081362829312
 CLIENT_ID = "hkn3fxk347cduph95gem7n22u2xod9"
 CLIENT_SECRET = "wf4j6ts074b94qvp2z44e7d4aha3e6"
 YOUR_USER_ID = 443842350377336860
@@ -129,6 +133,23 @@ async def start_twitch_monitor(bot):
             print(f"Error while checking Twitch: {e}")
         await asyncio.sleep(300)  # Check every 5 minutes
 
+#
+# časovanie QOTD na 10 ráno
+#
+@tasks.loop(minutes=1)
+async def daily_qotd_task():
+    prague_tz = pytz.timezone("Europe/Prague")
+    now = datetime.now(prague_tz)
+    target_time = now.replace(hour=10, minute=0, second=0, microsecond=0)
+
+    if now >= target_time and now < target_time + timedelta(minutes=1):
+        guild = bot.get_guild(GUILD_ID)
+        if guild:
+            interaction = None
+            cog = bot.get_cog("QOTD_slash")
+            if cog:
+                await cog.send_qotd(interaction)
+
 # Event: Bot je připraven
 @bot.event
 async def on_ready():
@@ -138,6 +159,7 @@ async def on_ready():
     await sync_commands(bot)
     await bot.change_presence(activity=discord.Streaming(name='Beta 0.3.2', url='https://www.twitch.tv/Bluecat201'))
     start_twitch_monitor(bot)
+    daily_qotd_task.start()  # Start the daily QOTD task
     print(f'Bot sleduje Twitch')
 
     channel_id = 1325107856801923113  # Replace with your channel's ID
@@ -242,27 +264,35 @@ async def support(ctx):
 async def twitch(ctx):
     await ctx.send("Here is developer twitch channel: https://www.twitch.tv/bluecat201")
 
-#response
-chat_session = ChatSession()
+#
+#   AI Chatbot
+#   
+#   Gemini : /gemini_api.py
+#   DigitalOcean : /chatbot.py
+#
+chat_session_gemini = ChatSession()
+chat_session_digitalocean = AIChat()
 
 @bot.event
 async def on_message(message):
     IGNORED_CHANNELS = [648557196837388289]
-    # Don't let the bot respond to itself or other bots
     if message.author.bot:
         return
     
-    # Ignorujte zprávy z konkrétních kanálů
     if message.channel.id in IGNORED_CHANNELS:
         return
 
-    # Check if the bot is mentioned
     if bot.user.mentioned_in(message):
-        query = message.content.replace(f"<@!{bot.user.id}>", "").strip()  # Odstraní zmínku bota z obsahu zprávy
-        response = await chat_session.send_message(query)
+        query = message.content.replace(f"<@!{bot.user.id}>", "").strip()
+        async with message.channel.typing():
+            if AI_PROVIDER == "Gemini":
+                response = await chat_session_gemini.send_message(query)
+            elif AI_PROVIDER == "DigitalOcean":
+                response = await chat_session_digitalocean.send_message(query)
+            else:
+                response = "AI provider is not configured properly."
         await message.reply(response)
 
-    # Handle normal bot commands as well
     await bot.process_commands(message)
 
 # Reset command (restricted to your user)
