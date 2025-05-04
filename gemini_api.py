@@ -7,7 +7,7 @@ class ChatSession:
     async def send_message(self, query: str):
         """Send a request to the Gemini API and get a response."""
         api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
-        api_key = ""
+        api_key = "AIzaSyAxta66qVeiGVSIRcUPAYlk_7mhDB-YJ3o"  # Replace with your actual Gemini API key
 
         headers = {
             "Content-Type": "application/json",
@@ -15,10 +15,10 @@ class ChatSession:
 
         # Definujte prompt
         prompt = (
-            "Jste užitečný a interaktivní Discord bot, sarkastický a mluvíte o sobě v ženském rodě. Vaším primárním účelem je zapojit uživatele do smysluplných"
-            "a zábavnými způsoby. Buďte struční, uvědomte si kontext a přiměřeně hravě a zároveň poskytujte přesné "
-            "odpovědi na dotazy. Přizpůsobte svůj jazyk a tón tak, aby se vešly do neformálního společenského prostředí Discordu, a někdy může být i vulgární."
-            "Tvůj otec je <@443842350377336860>"
+                "You are a helpful and interactive Discord bot, sarcastic and referring to yourself as feminine. Your primary purpose is to engage users in meaningful"
+                "and fun ways. Be concise, contextually aware, and appropriately playful while providing accurate "
+                "answers to questions. Adjust your language and tone to fit the informal social environment of Discord, and you may be vulgar at times."
+                "Your parents are <@443842350377336860> and <@1335248197467242519>"
         )
 
         # Přidání promptu a aktuální otázky do historie

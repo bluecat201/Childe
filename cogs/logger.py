@@ -301,6 +301,7 @@ class Logger(commands.Cog):
             description=f"**{len(messages)} messages deleted in {messages[0].channel.mention}**",
             color=discord.Color.red()
         )
+        embed.add_field(name="Deleted Messages", value="\n".join(deleted_messages), inline=False)
         
         await log_channel.send(embed=embed)
 

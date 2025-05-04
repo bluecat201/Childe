@@ -1,0 +1,9 @@
+discord.py
+aiohttp
+aiofiles
+requests
+json
+os
+asyncio
+random
+datetime

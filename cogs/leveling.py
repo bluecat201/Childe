@@ -103,7 +103,7 @@ class Leveling(commands.Cog):
                 mention_text = message.author.mention if mention_user else message.author.name
 
                 await level_up_channel.send(
-                    f"Gratulujeme, {mention_text}! Dosáhl(a) jsi úrovně {leveling_data[guild_id][user_id_str]['level']}!"
+                    f"Congratulation, {mention_text}! Reached level {leveling_data[guild_id][user_id_str]['level']}!"
                 )
 
     @commands.group()
@@ -118,9 +118,9 @@ class Leveling(commands.Cog):
         if channel_id not in ignored_channels[guild_id]:
             ignored_channels[guild_id].append(channel_id)
             await save_data(IGNORED_CHANNELS_FILE, ignored_channels)
-            await ctx.send(f"Kanál {channel.mention} byl přidán do seznamu ignorovaných.")
+            await ctx.send(f"Channel {channel.mention} was added to list of ignored channels.")
         else:
-            await ctx.send("Tento kanál je již ignorován.")
+            await ctx.send("This channel is already ignored.")
 
     @commands.group()
     @commands.has_permissions(administrator=True)
@@ -131,9 +131,9 @@ class Leveling(commands.Cog):
         if guild_id in ignored_channels and channel_id in ignored_channels[guild_id]:
             ignored_channels[guild_id].remove(channel_id)
             await save_data(IGNORED_CHANNELS_FILE, ignored_channels)
-            await ctx.send(f"Kanál {channel.mention} byl odebrán ze seznamu ignorovaných.")
+            await ctx.send(f"Channel {channel.mention} was deleted from list of ignored channels.")
         else:
-            await ctx.send("Tento kanál není ignorován.")
+            await ctx.send("This channel isn't ignored.")
 
     @commands.group()
     @commands.has_permissions(administrator=True)
@@ -141,7 +141,7 @@ class Leveling(commands.Cog):
         guild_id = str(ctx.guild.id)
         level_up_channels[guild_id] = str(channel.id)
         await save_data(LEVEL_UP_CHANNELS_FILE, level_up_channels)
-        await ctx.send(f"Kanál {channel.mention} byl nastaven pro oznámení o zvýšení úrovně.")
+        await ctx.send(f"Channel {channel.mention} was set for announcement of level up.")
 
     @commands.group()
     @commands.has_permissions(administrator=True)
@@ -150,9 +150,9 @@ class Leveling(commands.Cog):
         if guild_id in level_up_channels:
             del level_up_channels[guild_id]
             await save_data(LEVEL_UP_CHANNELS_FILE, level_up_channels)
-            await ctx.send("Kanál pro oznámení o zvýšení úrovně byl resetován.")
+            await ctx.send("Channel for announcement of level up was reseted.")
         else:
-            await ctx.send("Kanál pro oznámení nebyl nastaven.")
+            await ctx.send("Channel for announcement of level up wasn't set up.")
 
     @commands.command()
     @commands.has_permissions(administrator=True)
@@ -162,15 +162,15 @@ class Leveling(commands.Cog):
         leveling_enabled[guild_id] = not current_state
         await save_data(LEVELING_ENABLED_FILE, leveling_enabled)
 
-        state_message = "zapnutý" if leveling_enabled[guild_id] else "vypnutý"
-        await ctx.send(f"Leveling systém byl nyní {state_message}.")
+        state_message = "on" if leveling_enabled[guild_id] else "off"
+        await ctx.send(f"Level system is now {state_message}.")
 
     @commands.command()
     async def leaderboard(self, ctx):
         guild_id = str(ctx.guild.id)
 
         if guild_id not in leveling_data or not leveling_data[guild_id]:
-            await ctx.send("Nikdo zatím nezískal žádné XP.")
+            await ctx.send("Nobody has any xp right now.")
             return
 
         sorted_users = sorted(leveling_data[guild_id].items(), key=lambda x: (x[1]['level'], x[1]['total_xp']), reverse=True)
@@ -178,9 +178,9 @@ class Leveling(commands.Cog):
 
         for i, (user_id, data) in enumerate(sorted_users[:10], 1):
             user = await self.bot.fetch_user(int(user_id))
-            leaderboard_text += f"{i}. {user.name}: Úroveň {data['level']} ({data['total_xp']} celkových XP, {data['messages']} zpráv)\n"
+            leaderboard_text += f"{i}. {user.name}: Level {data['level']} ({data['total_xp']} total XP, {data['messages']} messages)\n"
 
-        embed = discord.Embed(title="Top 10 hráčů", description=leaderboard_text, color=discord.Color.blue())
+        embed = discord.Embed(title="Top 10 chatters", description=leaderboard_text, color=discord.Color.blue())
         await ctx.send(embed=embed)
 
     @commands.command()
@@ -191,9 +191,9 @@ class Leveling(commands.Cog):
 
         if guild_id in leveling_data and user_id in leveling_data[guild_id]:
             user_data = leveling_data[guild_id][user_id]
-            await ctx.send(f"{member.mention} má úroveň {user_data['level']}, {user_data['total_xp']} celkových XP a poslal(a) {user_data['messages']} zpráv.")
+            await ctx.send(f"{member.mention} has level {user_data['level']}, {user_data['total_xp']} total XP and send {user_data['messages']} messages.")
         else:
-            await ctx.send(f"{member.mention} zatím nemá žádnou úroveň ani XP.")
+            await ctx.send(f"{member.mention} doesn't has any level and XP.")
 
     @commands.command()
     async def toggle_mention(self, ctx):
@@ -202,8 +202,8 @@ class Leveling(commands.Cog):
         mention_prefs[user_id] = not current_pref
         await save_data(MENTION_PREFS_FILE, mention_prefs)
 
-        state_message = "zapnuto" if mention_prefs[user_id] else "vypnuto"
-        await ctx.send(f"Označení při zvýšení úrovně bylo nyní {state_message}.")
+        state_message = "on" if mention_prefs[user_id] else "off"
+        await ctx.send(f"Mention at level up is now {state_message}.")
 
 async def setup(bot):
     await bot.add_cog(Leveling(bot))

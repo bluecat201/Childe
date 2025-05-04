@@ -82,7 +82,7 @@ class QOTD(commands.Cog):
 
         self.qotd_data["guilds"][guild_id]["questions"].append(question)
         await save_qotd_data(self.qotd_data)
-        await ctx.send(f"Otázka byla přidána: {question}")
+        await ctx.send(f"Question was added: {question}")
 
     @commands.command(name="sendqotd")
     @commands.has_permissions(manage_guild=True)
@@ -93,12 +93,12 @@ class QOTD(commands.Cog):
         questions = guild_data.get("questions", [])
 
         if not channel_id or not questions:
-            await ctx.send("Nebyla nastavena žádná místnost nebo otázky.")
+            await ctx.send("No channel or question was set.")
             return
 
         channel = self.bot.get_channel(channel_id)
         if not channel:
-            await ctx.send("Zadaná místnost neexistuje.")
+            await ctx.send("This channel doesn't exist.")
             return
 
         question = questions.pop(0)
@@ -116,7 +116,7 @@ class QOTD(commands.Cog):
 
         self.qotd_data["guilds"][guild_id]["channel_id"] = channel.id
         await save_qotd_data(self.qotd_data)
-        await ctx.send(f"Místnost pro QOTD byla nastavena na {channel.mention}")
+        await ctx.send(f"Channel for QOTD was set to {channel.mention}")
 
     @commands.command(name="setqotdping")
     @commands.has_permissions(manage_guild=True)
@@ -127,7 +127,7 @@ class QOTD(commands.Cog):
 
         self.qotd_data["guilds"][guild_id]["ping"] = ping
         await save_qotd_data(self.qotd_data)
-        await ctx.send(f"Ping pro QOTD byl nastaven na: {ping}")
+        await ctx.send(f"Ping for QOTD was set to: {ping}")
 
     @commands.command(name="listquestions")
     @commands.has_permissions(manage_guild=True)
@@ -137,11 +137,11 @@ class QOTD(commands.Cog):
         questions = guild_data.get("questions", [])
 
         if not questions:
-            await ctx.send("Nejsou žádné otázky v databázi.")
+            await ctx.send("No question in database.")
             return
 
         questions_list = "\n".join([f"{i+1}. {q}" for i, q in enumerate(questions)])
-        await ctx.send(f"Aktuální otázky:\n{questions_list}")
+        await ctx.send(f"Current questions:\n{questions_list}")
 
 async def setup(bot):
     await bot.add_cog(QOTD(bot))

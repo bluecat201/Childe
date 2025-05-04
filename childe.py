@@ -49,11 +49,12 @@ intents.members = True
 bot = commands.Bot(command_prefix=determine_prefix, intents=intents)
 
 GUILD_ID = 535890114258141184 
-TWITCH_CHANNEL = "bluecatlive"  # Twitch kanál, který chcete sledovat
+TWITCH_CHANNEL = "bluecat201"  # Twitch kanál, který chcete sledovat
 ANNOUNCEMENT_CHANNEL_ID = 592348081362829312  # ID kanálu, kde chcete oznámení
-TWITCH_CLIENT_ID = "hkn3fxk347cduph95gem7n22u2xod9"
-TWITCH_CLIENT_SECRET = ""
+CLIENT_ID = "hkn3fxk347cduph95gem7n22u2xod9"
+CLIENT_SECRET = "wf4j6ts074b94qvp2z44e7d4aha3e6"
 YOUR_USER_ID = 443842350377336860
+CO_OWNER_USER_ID = 1335248197467242519
 
 #twitch announcement
 access_token = None
@@ -64,8 +65,8 @@ async def get_access_token():
     global access_token
     url = "https://id.twitch.tv/oauth2/token"
     params = {
-        "client_id": TWITCH_CLIENT_ID,
-        "client_secret": TWITCH_CLIENT_SECRET,
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
         "grant_type": "client_credentials"
     }
     response = requests.post(url, data=params)
@@ -81,7 +82,7 @@ async def check_twitch(bot):
     global is_stream_live
     url = f"https://api.twitch.tv/helix/streams?user_login={TWITCH_CHANNEL}"
     headers = {
-        "Client-ID": TWITCH_CLIENT_ID,
+        "Client-ID": CLIENT_ID,
         "Authorization": f"Bearer {access_token}"
     }
     async with aiohttp.ClientSession() as session:
@@ -135,9 +136,17 @@ async def on_ready():
     print(f'Bot ID: {bot.user.id}')
     await load_extensions()
     await sync_commands(bot)
-    await bot.change_presence(activity=discord.Streaming(name='Beta 0.3.0', url='https://www.twitch.tv/bluecatlive'))
+    await bot.change_presence(activity=discord.Streaming(name='Beta 0.3.2', url='https://www.twitch.tv/Bluecat201'))
     start_twitch_monitor(bot)
     print(f'Bot sleduje Twitch')
+
+    channel_id = 1325107856801923113  # Replace with your channel's ID
+    channel = bot.get_channel(channel_id)
+    
+    if channel:
+        await channel.send("Bot is ready! ✅")  # Customize the message
+    else:
+        print(f'Channel with ID {channel_id} not found.')
 
 # Funkce pro načtení všech extensions
 async def load_extensions():
@@ -182,8 +191,8 @@ async def rps(interaction: discord.Interaction, option: app_commands.Choice[str]
 # Slash příkaz: Odkazy
 @bot.tree.command(name="links", description="My socials")
 @app_commands.choices(option=[
-    app_commands.Choice(name="Twitch", value="My twitch: https://www.twitch.tv/bluecatlive"),
-    app_commands.Choice(name="Support", value="Here is my support server: https://discord.gg/blueshock"),
+    app_commands.Choice(name="Twitch", value="My twitch: https://www.twitch.tv/bluecat201"),
+    app_commands.Choice(name="Support", value="Here is my support server: https://discord.gg/QmB2Ang4vr"),
     app_commands.Choice(name="Youtube", value="Main Channel: https://www.youtube.com/channel/UCwY2CDHkQGmCIwgVgEJKt8w"),
     app_commands.Choice(name="Instagram", value="My IG: https://www.instagram.com/bluecat221/"),
     app_commands.Choice(name="Web", value="My website: https://bluecat201.weebly.com/"),
@@ -211,7 +220,7 @@ async def bluecat(ctx):
 #info
 @bot.command(aliases=['Info','INFO'])
 async def info(ctx):
-    await ctx.send(f"The bot was created as my long-term graduation project \nRelease date of the first alpha version: 5.9.2021 \nRelease date of the first beta version: 30.9.2021\nProgrammed in python \nIf you have any comments, advice or ideas for the bot, you can write them on the support server. \nThe number of servers I'm on: {len(bot.guilds)}\nCurrent version: Beta 0.3.0 \nDeveloper: Bluecat201")
+    await ctx.send(f"The bot was created as my long-term graduation project \nRelease date of the first alpha version: 5.9.2021 \nRelease date of the first beta version: 30.9.2021\nProgrammed in python \nIf you have any comments, advice or ideas for the bot, you can write them on the support server. \nThe number of servers I'm on: {len(bot.guilds)}\nCurrent version: Beta 0.3.2 \nDeveloper: Bluecat201")
 
 #invite bota
 @bot.command(aliases=['Invite','INVITE'])
@@ -226,12 +235,12 @@ async def ping(ctx):
 #support
 @bot.command(aliases=['Support','SUPPORT'])
 async def support(ctx):
-    await ctx.send("Here is my support server: https://discord.gg/blueshock")
+    await ctx.send("Here is my support server: https://discord.gg/QmB2Ang4vr")
 
 #twitch
 @bot.command(aliases=['Twitch','TWITCH'])
 async def twitch(ctx):
-    await ctx.send("Here is developer twitch channel: https://www.twitch.tv/bluecatlive")
+    await ctx.send("Here is developer twitch channel: https://www.twitch.tv/bluecat201")
 
 #response
 chat_session = ChatSession()
@@ -259,7 +268,7 @@ async def on_message(message):
 # Reset command (restricted to your user)
 @bot.command()
 async def reset(ctx):
-    if ctx.author.id != YOUR_USER_ID:
+    if ctx.author.id != YOUR_USER_ID and ctx.author.id != CO_OWNER_USER_ID:
         await ctx.send("This command can only be used by the owner of the bot.")
         return
 
