@@ -1,1 +1,0 @@
-aiofiles, discord_slash, discord_components, quart
