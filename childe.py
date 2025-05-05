@@ -10,6 +10,7 @@ from discord import app_commands
 from discord.ext.commands import MissingPermissions
 import aiofiles
 import requests
+import subprocess  # Add this import for running git commands
 from datetime import datetime
 from gemini_api import ChatSession
 
@@ -61,7 +62,6 @@ access_token = None
 is_stream_live = False
 
 async def get_access_token():
-    """Fetch a new access token from Twitch API."""
     global access_token
     url = "https://id.twitch.tv/oauth2/token"
     params = {
@@ -78,7 +78,6 @@ async def get_access_token():
         print(f"Failed to get access token: {response.status_code} {response.text}")
 
 async def check_twitch(bot):
-    """Check if the specified Twitch channel is live and send a notification to Discord."""
     global is_stream_live
     url = f"https://api.twitch.tv/helix/streams?user_login={TWITCH_CHANNEL}"
     headers = {
@@ -120,7 +119,6 @@ async def check_twitch(bot):
                 print(f"Failed to fetch Twitch stream data: {response.status}")
 
 async def start_twitch_monitor(bot):
-    """Periodically check Twitch stream status."""
     await get_access_token()
     while True:
         try:
@@ -278,6 +276,64 @@ async def reset(ctx):
 
     await ctx.send("Bot is reseting...")
     await bot.close()
+
+#state command
+@bot.command(aliases=['State', 'STATUS', 'status'])
+async def state(ctx):
+    """Retrieve current git status and version information"""
+    if ctx.author.id != YOUR_USER_ID and ctx.author.id != CO_OWNER_USER_ID:
+        await ctx.send("This command can only be used by the owner or co-owner of the bot.")
+        return
+    
+    # Start typing indicator to show command is processing
+    async with ctx.typing():
+        try:
+            # Get the current branch
+            branch = subprocess.check_output(
+                ['git', 'rev-parse', '--abbrev-ref', 'HEAD'], 
+                stderr=subprocess.STDOUT
+            ).decode('utf-8').strip()
+            
+            # Get the latest commit hash and message
+            commit = subprocess.check_output(
+                ['git', 'log', '-1', '--oneline'], 
+                stderr=subprocess.STDOUT
+            ).decode('utf-8').strip()
+            
+            # Get status (modified files, etc.)
+            status = subprocess.check_output(
+                ['git', 'status', '--porcelain'], 
+                stderr=subprocess.STDOUT
+            ).decode('utf-8').strip()
+            
+            # Format the response
+            embed = discord.Embed(
+                title="Bot Git Status", 
+                color=discord.Color.blue(),
+                timestamp=datetime.now()
+            )
+            
+            embed.add_field(name="Current Branch", value=f"`{branch}`", inline=False)
+            embed.add_field(name="Latest Commit", value=f"`{commit}`", inline=False)
+            
+            if status:
+                embed.add_field(
+                    name="Modified Files", 
+                    value=f"```\n{status[:1000]}```" if len(status) <= 1000 else f"```\n{status[:997]}...```",
+                    inline=False
+                )
+            else:
+                embed.add_field(name="Modified Files", value="No modified files", inline=False)
+                
+            embed.set_footer(text=f"Requested by {ctx.author.name}")
+            
+            await ctx.send(embed=embed)
+            
+        except subprocess.CalledProcessError as e:
+            await ctx.send(f"Error running git commands: ```\n{e.output.decode('utf-8')}```")
+            
+        except Exception as e:
+            await ctx.send(f"Error: {str(e)}")
 
 #|výstup do konzole|
 
