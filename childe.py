@@ -353,5 +353,5 @@ async def on_message_delete(message):
 
 
 #bot.ipc.start()
-bot.add_cog(QOTDTimer(bot))
+# bot.add_cog(QOTDTimer(bot))
 bot.run(TOKEN)
