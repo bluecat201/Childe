@@ -35,45 +35,6 @@ class QOTD(commands.Cog):
     def cog_unload(self):
         self.qotd_task.cancel()
 
-    @tasks.loop(hours=24)
-    async def qotd_task(self):
-        now = datetime.now()
-        target_time = time(12, 0)
-        today_target = datetime.combine(now.date(), target_time)
-
-        if now > today_target:
-            await self.send_questions_to_all_guilds()
-            delay = (timedelta(days=1) + today_target - now).total_seconds()
-        else:
-            delay = (today_target - now).total_seconds()
-
-        await asyncio.sleep(delay)
-        await self.send_questions_to_all_guilds()
-
-    async def send_questions_to_all_guilds(self):
-        for guild_id, data in self.qotd_data["guilds"].items():
-            channel_id = data.get("channel_id")
-            questions = data.get("questions", [])
-
-            if not channel_id or not questions:
-                continue
-
-            channel = self.bot.get_channel(channel_id)
-            if not channel:
-                continue
-
-            question = questions.pop(0)
-            ping = data.get("ping")
-            await channel.send(f"{ping or ''} **Question of the Day:** {question}")
-
-        await save_qotd_data(self.qotd_data)
-
-    @qotd_task.before_loop
-    async def before_qotd_task(self):
-        await self.bot.wait_until_ready()
-        if not self.qotd_data:
-            self.qotd_data = await load_qotd_data()
-
     @commands.command(name="addquestion")
     async def add_question(self, ctx, *, question):
         guild_id = str(ctx.guild.id)
