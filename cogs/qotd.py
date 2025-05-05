@@ -58,6 +58,10 @@ class QOTD(commands.Cog):
             if not channel_id or not questions:
                 continue
 
+            # Convert channel_id to integer if it's a string
+            if isinstance(channel_id, str):
+                channel_id = int(channel_id)
+            
             channel = self.bot.get_channel(channel_id)
             if not channel:
                 continue
@@ -96,6 +100,10 @@ class QOTD(commands.Cog):
             await ctx.send("No channel or question was set.")
             return
 
+        # Convert to int if it's a string
+        if isinstance(channel_id, str):
+            channel_id = int(channel_id)
+        
         channel = self.bot.get_channel(channel_id)
         if not channel:
             await ctx.send("This channel doesn't exist.")

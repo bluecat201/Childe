@@ -55,6 +55,10 @@ class QOTD_slash(commands.Cog):
             if not channel_id or not questions:
                 continue
 
+            # Convert channel_id to integer if it's a string
+            if isinstance(channel_id, str):
+                channel_id = int(channel_id)
+                
             channel = self.bot.get_channel(channel_id)
             if not channel:
                 continue
@@ -95,6 +99,10 @@ class QOTD_slash(commands.Cog):
             await interaction.response.send_message("Nebyla nastavena žádná místnost nebo otázky.", ephemeral=True)
             return
 
+        # Convert to int if it's a string
+        if isinstance(channel_id, str):
+            channel_id = int(channel_id)
+            
         channel = self.bot.get_channel(channel_id)
         if not channel:
             await interaction.response.send_message("Zadaná místnost neexistuje.", ephemeral=True)

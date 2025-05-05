@@ -259,7 +259,11 @@ async def on_message(message):
     # Check if the bot is mentioned
     if bot.user.mentioned_in(message):
         query = message.content.replace(f"<@!{bot.user.id}>", "").strip()  # Odstraní zmínku bota z obsahu zprávy
-        response = await chat_session.send_message(query)
+        
+        # Start typing indicator while generating response
+        async with message.channel.typing():
+            response = await chat_session.send_message(query)
+            
         await message.reply(response)
 
     # Handle normal bot commands as well
