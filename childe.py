@@ -136,19 +136,44 @@ async def start_twitch_monitor(bot):
 #
 # časovanie QOTD na 10 ráno
 #
-@tasks.loop(minutes=1)
+QOTD_FILE = "qotd.json"
+async def save_qotd_data(data):
+    async with aiofiles.open(QOTD_FILE, mode="w") as f:
+        await f.write(json.dumps(data, indent=4))
+async def load_qotd_data():
+    if not os.path.exists(QOTD_FILE):
+        default_data = {"guilds": {}}
+        await save_qotd_data(default_data)
+        return default_data
+    async with aiofiles.open(QOTD_FILE, mode="r") as f:
+        data = await f.read()
+        return json.loads(data) if data else {"guilds": {}}
+@tasks.loop(time=datetime.time(hour=10, minute=0, tzinfo=pytz.timezone('Europe/Prague')))
 async def daily_qotd_task():
+    guild_id = "535890114258141184"
+    guild_data = self.qotd_data["guilds"].get(guild_id, {})
+    channel_id = guild_data.get("channel_id")
+    questions = guild_data.get("questions", [])
+
+    if not channel_id or not questions:
+        await interaction.response.send_message("Nebyla nastavena žádná místnost nebo otázky.", ephemeral=True)
+        return
+
+    channel = self.bot.get_channel(channel_id)
+    if not channel:
+        await interaction.response.send_message("Zadaná místnost neexistuje.", ephemeral=True)
+        return
+    question = questions.pop(0)
+    ping = guild_data.get("ping")
+    await channel.send(f"{ping or ''} **Question of the Day:** {question}")
+    await save_qotd_data(self.qotd_data)
+
+@daily_qotd_task.before_loop
+async def before_daily_qotd():
+    await bot.wait_until_ready()
     prague_tz = pytz.timezone("Europe/Prague")
     now = datetime.now(prague_tz)
-    target_time = now.replace(hour=10, minute=0, second=0, microsecond=0)
-
-    if now >= target_time and now < target_time + timedelta(minutes=1):
-        guild = bot.get_guild(GUILD_ID)
-        if guild:
-            interaction = None
-            cog = bot.get_cog("QOTD_slash")
-            if cog:
-                await cog.send_qotd(interaction)
+    print(f"\n\nQOTD časovač aktívny\n")
 
 # Event: Bot je připraven
 @bot.event
