@@ -290,41 +290,27 @@ async def state(ctx):
                 stderr=subprocess.STDOUT
             ).decode('utf-8').strip()
             
+            # Get full commit info with ID and author
             commit = subprocess.check_output(
                 ['git', 'log', '-1', '--pretty=format:%h - %s (%an)'], 
                 stderr=subprocess.STDOUT
             ).decode('utf-8').strip()
             
-            status = subprocess.check_output(
-                ['git', 'status', '--porcelain'], 
+            # Extract just the commit message for the version
+            version = subprocess.check_output(
+                ['git', 'log', '-1', '--pretty=format:%s'], 
                 stderr=subprocess.STDOUT
             ).decode('utf-8').strip()
-            
-            if status:
-                filtered_status_lines = [
-                    line for line in status.split('\n') 
-                    if '__pycache__' not in line
-                ]
-                status = '\n'.join(filtered_status_lines)
-                
+                                        
             embed = discord.Embed(
                 title="Bot Git Status", 
                 color=discord.Color.blue(),
                 timestamp=datetime.now()
             )
-            
+            embed.add_field(name="Current Version", value=f"`{version}`", inline=False)
             embed.add_field(name="Current Branch", value=f"`{branch}`", inline=False)
             embed.add_field(name="Latest Commit", value=f"`{commit}`", inline=False)
-            
-            if status:
-                embed.add_field(
-                    name="Modified Files", 
-                    value=f"```\n{status[:1000]}```" if len(status) <= 1000 else f"```\n{status[:997]}...```",
-                    inline=False
-                )
-            else:
-                embed.add_field(name="Modified Files", value="No modified files", inline=False)
-                
+                            
             embed.set_footer(text=f"Requested by {ctx.author.name}")
             await ctx.send(embed=embed)
             
