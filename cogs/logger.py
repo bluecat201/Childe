@@ -290,20 +290,48 @@ class Logger(commands.Cog):
         if not log_channel:
             return
 
-        deleted_messages = []
-        for message in messages:
-            author = message.author.mention if message.author else "Unknown"
-            content = message.content if message.content else "[No Content]"
-            deleted_messages.append(f"**{author}:** {content}")
+        channel_name = messages[0].channel.name
         
-        embed = discord.Embed(
-            title="🗑️ Bulk Message Deletion",
-            description=f"**{len(messages)} messages deleted in {messages[0].channel.mention}**",
-            color=discord.Color.red()
-        )
-        embed.add_field(name="Deleted Messages", value="\n".join(deleted_messages), inline=False)
-        
-        await log_channel.send(embed=embed)
+        # subor ked 10 sprav
+        if len(messages) > 10:
+            file_content = []
+            for message in messages:
+                timestamp = message.created_at.strftime('%Y-%m-%d %H:%M:%S')
+                author = message.author.name if message.author else "Unknown"
+                content = message.content if message.content else "[No Content]"
+                file_content.append(f"[{timestamp}] Channel: #{channel_name} | User: {author} | Content: {content}")
+            
+            file_name = f"bulk_delete_{int(messages[0].created_at.timestamp())}.txt"
+            with open(file_name, 'w', encoding='utf-8') as f:
+                f.write('\n'.join(file_content))
+            
+            embed = discord.Embed(
+                title="🗑️ Bulk Message Deletion",
+                description=f"**{len(messages)} messages deleted in {messages[0].channel.mention}**",
+                color=discord.Color.red()
+            )
+            embed.add_field(name="Details", value="See attached file for all deleted messages", inline=False)
+            
+            with open(file_name, 'rb') as f:
+                file = discord.File(f, filename=file_name)
+                await log_channel.send(embed=embed, file=file)
+            
+            os.remove(file_name)
+        else:
+            deleted_messages = []
+            for message in messages:
+                author = message.author.mention if message.author else "Unknown"
+                content = message.content if message.content else "[No Content]"
+                deleted_messages.append(f"**{author}:** {content}")
+            
+            embed = discord.Embed(
+                title="🗑️ Bulk Message Deletion",
+                description=f"**{len(messages)} messages deleted in {messages[0].channel.mention}**",
+                color=discord.Color.red()
+            )
+            embed.add_field(name="Deleted Messages", value="\n".join(deleted_messages), inline=False)
+            
+            await log_channel.send(embed=embed)
 
 async def setup(bot):
     await bot.add_cog(Logger(bot))
