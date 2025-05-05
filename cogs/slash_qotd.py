@@ -1,5 +1,5 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord import app_commands
 import json
 from datetime import datetime, timedelta
@@ -28,16 +28,26 @@ async def save_qotd_data(data):
 class QOTD_slash(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.qotd_data = None
+        self.qotd_task.start()
 
     async def cog_load(self):
-        self.qotd_data = await load_qotd_data()
+        self.qotd_data = await load_qotd_data()  # Načtení existujících dat při spuštění
 
     def cog_unload(self):
-        pass
+        self.qotd_task.cancel()
+
+    @tasks.loop(hours=24)
+    async def qotd_task(self):
+        now = datetime.now()
+        target_time = datetime.combine(now.date(), datetime.min.time()) + timedelta(hours=12)
+        delay = (target_time - now).total_seconds()
+
+        if delay > 0:
+            await asyncio.sleep(delay)
+
+        await self.send_questions_to_all_guilds()
 
     async def send_questions_to_all_guilds(self):
-        """Manually send questions to all guilds - kept for utility"""
         for guild_id, data in self.qotd_data["guilds"].items():
             channel_id = data.get("channel_id")
             questions = data.get("questions", [])
@@ -54,6 +64,12 @@ class QOTD_slash(commands.Cog):
             await channel.send(f"{ping or ''} **Question of the Day:** {question}")
 
         await save_qotd_data(self.qotd_data)
+
+    @qotd_task.before_loop
+    async def before_qotd_task(self):
+        await self.bot.wait_until_ready()
+        if not self.qotd_data:
+            self.qotd_data = await load_qotd_data()
 
     # Slash příkaz: Přidání otázky
     @app_commands.command(name="addquestion", description="Přidá otázku do seznamu QOTD.")
