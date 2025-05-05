@@ -134,7 +134,7 @@ async def on_ready():
     print(f'Bot ID: {bot.user.id}')
     await load_extensions()
     await sync_commands(bot)
-    await bot.change_presence(activity=discord.Streaming(name='Beta 0.3.2', url='https://www.twitch.tv/Bluecat201'))
+    await bot.change_presence(activity=discord.Streaming(name='Beta 0.3.4', url='https://www.twitch.tv/Bluecat201'))
     start_twitch_monitor(bot)
     print(f'Bot sleduje Twitch')
 
@@ -218,7 +218,7 @@ async def bluecat(ctx):
 #info
 @bot.command(aliases=['Info','INFO'])
 async def info(ctx):
-    await ctx.send(f"The bot was created as my long-term graduation project \nRelease date of the first alpha version: 5.9.2021 \nRelease date of the first beta version: 30.9.2021\nProgrammed in python \nIf you have any comments, advice or ideas for the bot, you can write them on the support server. \nThe number of servers I'm on: {len(bot.guilds)}\nCurrent version: Beta 0.3.2 \nDeveloper: Bluecat201")
+    await ctx.send(f"The bot was created as my long-term graduation project \nRelease date of the first alpha version: 5.9.2021 \nRelease date of the first beta version: 30.9.2021\nProgrammed in python \nIf you have any comments, advice or ideas for the bot, you can write them on the support server. \nThe number of servers I'm on: {len(bot.guilds)}\nCurrent version: Beta 0.3.4 \nDeveloper: Bluecat201")
 
 #invite bota
 @bot.command(aliases=['Invite','INVITE'])
