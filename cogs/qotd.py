@@ -1,5 +1,5 @@
 import discord
-from discord.ext import commands, tasks
+from discord.ext import commands
 import json
 from datetime import datetime, time, timedelta
 import asyncio
@@ -17,7 +17,7 @@ async def load_qotd_data():
     
     async with aiofiles.open(QOTD_FILE, mode="r") as f:
         data = await f.read()
-        return json.loads(data) if data else {"guilds": {}}  # Ošetření prázdného souboru
+        return json.loads(data) if data else {"guilds": {}}
 
 
 async def save_qotd_data(data):
@@ -27,13 +27,32 @@ async def save_qotd_data(data):
 class QOTD(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.qotd_task.start()
+        self.qotd_data = None
 
     async def cog_load(self):
         self.qotd_data = await load_qotd_data()
 
     def cog_unload(self):
-        self.qotd_task.cancel()
+        pass
+
+    async def send_questions_to_all_guilds(self):
+        """Manually send questions to all guilds - kept for utility"""
+        for guild_id, data in self.qotd_data["guilds"].items():
+            channel_id = data.get("channel_id")
+            questions = data.get("questions", [])
+
+            if not channel_id or not questions:
+                continue
+
+            channel = self.bot.get_channel(channel_id)
+            if not channel:
+                continue
+
+            question = questions.pop(0)
+            ping = data.get("ping")
+            await channel.send(f"{ping or ''} **Question of the Day:** {question}")
+
+        await save_qotd_data(self.qotd_data)
 
     @commands.command(name="addquestion")
     async def add_question(self, ctx, *, question):
