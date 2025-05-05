@@ -3,8 +3,15 @@ import json
 import os
 from discord.ext import commands
 from discord.ext.commands import MissingPermissions
+from datetime import datetime
+import aiofiles
 
 LOG_CHANNELS_FILE = "log_channels.json"
+LOGS_DIRECTORY = "logs"  # Main logs directory
+
+# Create logs directory if it doesn't exist
+if not os.path.exists(LOGS_DIRECTORY):
+    os.makedirs(LOGS_DIRECTORY)
 
 if not os.path.exists(LOG_CHANNELS_FILE):
     with open(LOG_CHANNELS_FILE, "w") as f:
@@ -27,6 +34,28 @@ class Logger(commands.Cog):
 
         with open(LOG_CHANNELS_FILE, "w") as f:
             json.dump(log_channels, f)
+    
+    async def log_to_file(self, guild_id, guild_name, title, description):
+        """Write log entry to file"""
+        try:
+            # Create guild directory if it doesn't exist
+            guild_dir = os.path.join(LOGS_DIRECTORY, f"{guild_id}_{guild_name}")
+            if not os.path.exists(guild_dir):
+                os.makedirs(guild_dir)
+            
+            # Create log file with today's date
+            today = datetime.now().strftime("%Y-%m-%d")
+            log_file = os.path.join(guild_dir, f"{today}.log")
+            
+            # Format log entry
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            log_entry = f"[{timestamp}] {title}: {description}\n"
+            
+            # Write to file (async)
+            async with aiofiles.open(log_file, 'a', encoding='utf-8') as f:
+                await f.write(log_entry)
+        except Exception as e:
+            print(f"Error writing to log file: {e}")
 
     @commands.command(name="set-logs-channel")
     @commands.has_permissions(administrator=True)
@@ -35,6 +64,15 @@ class Logger(commands.Cog):
         await ctx.send(f"The logging channel has been set to {channel.mention}")
 
     async def send_log(self, guild_id, title, description, color=discord.Color.blue(), files=None, embeds=None):
+        # Get guild object for name
+        guild = self.bot.get_guild(guild_id)
+        if not guild:
+            return
+            
+        # Log to file
+        await self.log_to_file(guild_id, guild.name, title, description)
+        
+        # Log to Discord
         log_channel_id = self.get_log_channel(guild_id)
         if log_channel_id and (channel := self.bot.get_channel(log_channel_id)):
             embed = discord.Embed(title=title, description=description, color=color)
@@ -43,7 +81,6 @@ class Logger(commands.Cog):
                     await channel.send(embed=e)
             await channel.send(embed=embed, files=files if files else [])
 
-    # Logování připojení uživatele
     @commands.Cog.listener()
     async def on_member_join(self, member):
         await self.send_log(
@@ -52,7 +89,6 @@ class Logger(commands.Cog):
             f"{member.mention} joined server."
         )
 
-    # Logování odpojení uživatele
     @commands.Cog.listener()
     async def on_member_remove(self, member):
         await self.send_log(
@@ -62,7 +98,6 @@ class Logger(commands.Cog):
             color=discord.Color.red()
         )
 
-    # Logace vytvoření kanálu
     @commands.Cog.listener()
     async def on_guild_channel_create(self, channel):
         category = channel.category.name if channel.category else "No Category"
@@ -79,7 +114,6 @@ class Logger(commands.Cog):
                 f"A new channel **{channel.name}** was created in category **{category}**."
             )
     
-    # Logace smazání kanálu
     @commands.Cog.listener()
     async def on_guild_channel_delete(self, channel):
         category = channel.category.name if channel.category else "No Category"
@@ -98,7 +132,6 @@ class Logger(commands.Cog):
                 color=discord.Color.red()
             )
     
-    # Logace změny oprávnění a změny kategorie kanálu
     @commands.Cog.listener()
     async def on_guild_channel_update(self, before, after):
         if before.id == self.get_log_channel(before.guild.id):
@@ -149,7 +182,6 @@ class Logger(commands.Cog):
                 )
                 return
 
-    # Logování vytvoření role
     @commands.Cog.listener()
     async def on_guild_role_create(self, role):
         await self.send_log(
@@ -158,7 +190,6 @@ class Logger(commands.Cog):
             f"A role has been created: **{role.name}**."
         )
 
-    # Logování smazání role
     @commands.Cog.listener()
     async def on_guild_role_delete(self, role):
         await self.send_log(
@@ -205,7 +236,6 @@ class Logger(commands.Cog):
                     color=discord.Color.green()
                 )
 
-    # Logování změny role
     @commands.Cog.listener()
     async def on_guild_role_update(self, before, after):
         if before.position != after.position:
@@ -236,7 +266,6 @@ class Logger(commands.Cog):
                 f"A role **{before.name}** has been edited.\n" + "\n".join(changes)
             )
 
-    # Logování editace zprávy
     @commands.Cog.listener()
     async def on_message_edit(self, before, after):
         if before.author.bot:  # Ignoruje boty
@@ -282,6 +311,22 @@ class Logger(commands.Cog):
         if not guild:
             return
 
+        channel_name = messages[0].channel.name
+        
+        # Format content for file logging
+        file_content = []
+        for message in messages:
+            timestamp = message.created_at.strftime('%Y-%m-%d %H:%M:%S')
+            author = message.author.name if message.author else "Unknown"
+            content = message.content if message.content else "[No Content]"
+            file_content.append(f"[{timestamp}] Channel: #{channel_name} | User: {author} | Content: {content}")
+        
+        # Log to file system
+        bulk_msg_log = f"Bulk deletion of {len(messages)} messages in #{channel_name}"
+        bulk_msg_details = "\n".join(file_content)
+        await self.log_to_file(guild.id, guild.name, "Bulk Message Deletion", f"{bulk_msg_log}\n{bulk_msg_details}")
+        
+        # Continue with Discord logging
         log_channel_id = self.get_log_channel(guild.id)
         if not log_channel_id:
             return
@@ -289,18 +334,9 @@ class Logger(commands.Cog):
         log_channel = self.bot.get_channel(log_channel_id)
         if not log_channel:
             return
-
-        channel_name = messages[0].channel.name
         
-        # subor ked 10 sprav
         if len(messages) > 10:
-            file_content = []
-            for message in messages:
-                timestamp = message.created_at.strftime('%Y-%m-%d %H:%M:%S')
-                author = message.author.name if message.author else "Unknown"
-                content = message.content if message.content else "[No Content]"
-                file_content.append(f"[{timestamp}] Channel: #{channel_name} | User: {author} | Content: {content}")
-            
+            # Create file for Discord
             file_name = f"bulk_delete_{int(messages[0].created_at.timestamp())}.txt"
             with open(file_name, 'w', encoding='utf-8') as f:
                 f.write('\n'.join(file_content))
@@ -318,6 +354,7 @@ class Logger(commands.Cog):
             
             os.remove(file_name)
         else:
+            # Original behavior
             deleted_messages = []
             for message in messages:
                 author = message.author.mention if message.author else "Unknown"
