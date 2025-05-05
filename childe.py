@@ -10,7 +10,7 @@ from discord import app_commands
 from discord.ext.commands import MissingPermissions
 import aiofiles
 import requests
-from datetime import datetime, timedelta
+from datetime import *
 from gemini_api import ChatSession
 from chatbot import AIChat
 import pytz 
