@@ -280,33 +280,33 @@ async def reset(ctx):
 #state command
 @bot.command(aliases=['State', 'STATUS', 'status'])
 async def state(ctx):
-    """Retrieve current git status and version information"""
     if ctx.author.id != YOUR_USER_ID and ctx.author.id != CO_OWNER_USER_ID:
         await ctx.send("This command can only be used by the owner or co-owner of the bot.")
         return
-    
-    # Start typing indicator to show command is processing
     async with ctx.typing():
         try:
-            # Get the current branch
             branch = subprocess.check_output(
                 ['git', 'rev-parse', '--abbrev-ref', 'HEAD'], 
                 stderr=subprocess.STDOUT
             ).decode('utf-8').strip()
             
-            # Get the latest commit hash and message
             commit = subprocess.check_output(
-                ['git', 'log', '-1', '--oneline'], 
+                ['git', 'log', '-1', '--pretty=format:%h - %s (%an)'], 
                 stderr=subprocess.STDOUT
             ).decode('utf-8').strip()
             
-            # Get status (modified files, etc.)
             status = subprocess.check_output(
                 ['git', 'status', '--porcelain'], 
                 stderr=subprocess.STDOUT
             ).decode('utf-8').strip()
             
-            # Format the response
+            if status:
+                filtered_status_lines = [
+                    line for line in status.split('\n') 
+                    if '__pycache__' not in line
+                ]
+                status = '\n'.join(filtered_status_lines)
+                
             embed = discord.Embed(
                 title="Bot Git Status", 
                 color=discord.Color.blue(),
@@ -326,12 +326,10 @@ async def state(ctx):
                 embed.add_field(name="Modified Files", value="No modified files", inline=False)
                 
             embed.set_footer(text=f"Requested by {ctx.author.name}")
-            
             await ctx.send(embed=embed)
             
         except subprocess.CalledProcessError as e:
             await ctx.send(f"Error running git commands: ```\n{e.output.decode('utf-8')}```")
-            
         except Exception as e:
             await ctx.send(f"Error: {str(e)}")
 
