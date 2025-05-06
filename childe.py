@@ -428,4 +428,3 @@ async def on_message_delete(message):
 
 #bot.ipc.start()
 bot.run(TOKEN)
-``` 
