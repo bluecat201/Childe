@@ -31,7 +31,7 @@ def get_version():
         return "Unknown Version"
 
 # Get the version at startup
-CURRENT_VERSION = get_version()
+CURRENT_VERSION = "0.3.4"
 
 # Načítání prefixů ze souboru
 if os.path.exists(PREFIX_FILE):
@@ -311,7 +311,7 @@ async def state(ctx):
             ).decode('utf-8').strip()
             
             # Use the same version variable across the bot
-            version = CURRENT_VERSION
+            version = CURRENT_VERSION (get_version())
                                         
             embed = discord.Embed(
                 title="Bot Git Status", 

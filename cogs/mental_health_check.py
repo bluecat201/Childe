@@ -178,22 +178,22 @@ class MentalHealthCheck(commands.Cog):
                 )
         await ctx.send("Mental health check message has been sent manually.")
 
-    @tasks.loop(hours=1)
-    async def check_loop(self):
-        if not self.check_enabled or not self.channel_ids:
-            return
+    # @tasks.loop(hours=1)
+    # async def check_loop(self):
+    #     if not self.check_enabled or not self.channel_ids:
+    #         return
 
-        now = datetime.utcnow()
-        if (now.hour % self.frequency) == 0:
-            ping_roles_mentions = " ".join([f"<@&{role_id}>" for role_id in self.ping_roles])
-            for channel_id in self.channel_ids:
-                channel = self.bot.get_channel(channel_id)
-                if channel:
-                    await channel.send(
-                        f"{ping_roles_mentions}\nThis is your mental health check-in! \n"
-                        "How are you feeling today? Use the command `/mentalhealth respond [mood]` to let us know. \n"
-                        "Available options: happy, sad, stressed, calm, tired, motivated, or others."
-                    )
+    #     now = datetime.utcnow()
+    #     if (now.hour % self.frequency) == 0:
+    #         ping_roles_mentions = " ".join([f"<@&{role_id}>" for role_id in self.ping_roles])
+    #         for channel_id in self.channel_ids:
+    #             channel = self.bot.get_channel(channel_id)
+    #             if channel:
+    #                 await channel.send(
+    #                     f"{ping_roles_mentions}\nThis is your mental health check-in! \n"
+    #                     "How are you feeling today? Use the command `/mentalhealth respond [mood]` to let us know. \n"
+    #                     "Available options: happy, sad, stressed, calm, tired, motivated, or others."
+    #                 )
 
     @mentalhealth.command(name="respond")
     async def respond(self, ctx, mood: str):
