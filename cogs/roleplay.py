@@ -86,7 +86,7 @@ class Roleplay(commands.Cog, name="Roleplay"):
         await self.fetch_neko_action(ctx, description, "happy")
 
     #highfive
-    @commands.command(aliases=['Highfive','HIGHFIVE'], help='You're having a highfive with the tagged user.')
+    @commands.command(aliases=['Highfive','HIGHFIVE'], help='You are having a highfive with the tagged user.')
     async def highfive(self, ctx,member : discord.User = None):
         if member is None:
             await ctx.send("You must tag/enter ID someone")
