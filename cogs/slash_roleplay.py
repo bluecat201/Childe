@@ -24,14 +24,14 @@ class SlashRoleplay(commands.Cog):
 
     # Vytváří univerzální příkazy pro interakce
     #bite
-    @app_commands.command(name="bite", description="Kousne označeného uživatele.")
+    @app_commands.command(name="bite", description="You bite the tagged user.")
     async def bite(self, interaction: discord.Interaction, member: discord.User):
-        description = f"{interaction.user.mention} kouše {member.mention}"
+        description = f"{interaction.user.mention} bites {member.mention}"
         embed = await self.fetch_neko_action(description, "bite")
         if embed:
             await interaction.response.send_message(embed=embed)
         else:
-            await interaction.response.send_message("Nepodařilo se získat data z API.", ephemeral=True)
+            await interaction.response.send_message("Failed to retrieve data from API.", ephemeral=True)
 
     #blush
     @app_commands.command(name="blush", description="Začervenáš se.")
