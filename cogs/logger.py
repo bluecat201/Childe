@@ -6,34 +6,50 @@ from discord.ext.commands import MissingPermissions
 from datetime import datetime
 import aiofiles
 
-LOG_CHANNELS_FILE = "log_channels.json"
+SETTINGS_FILE = "server_settings.json"
 LOGS_DIRECTORY = "logs"  # Main logs directory
 
 # Create logs directory if it doesn't exist
 if not os.path.exists(LOGS_DIRECTORY):
     os.makedirs(LOGS_DIRECTORY)
 
-if not os.path.exists(LOG_CHANNELS_FILE):
-    with open(LOG_CHANNELS_FILE, "w") as f:
-        json.dump({}, f)
-
 class Logger(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
     def get_log_channel(self, guild_id):
-        with open(LOG_CHANNELS_FILE, "r") as f:
-            log_channels = json.load(f)
-        return log_channels.get(str(guild_id))
+        """Get log channel ID from centralized settings"""
+        if os.path.exists(SETTINGS_FILE):
+            with open(SETTINGS_FILE, "r") as f:
+                settings = json.load(f)
+                
+            guild_id = str(guild_id)
+            return settings.get("guilds", {}).get(guild_id, {}).get("logging", {}).get("log_channel_id")
+        return None
 
     def set_log_channel(self, guild_id, channel_id):
-        with open(LOG_CHANNELS_FILE, "r") as f:
-            log_channels = json.load(f)
-
-        log_channels[str(guild_id)] = channel_id
-
-        with open(LOG_CHANNELS_FILE, "w") as f:
-            json.dump(log_channels, f)
+        """Update log channel in centralized settings"""
+        guild_id = str(guild_id)
+        
+        if os.path.exists(SETTINGS_FILE):
+            with open(SETTINGS_FILE, "r") as f:
+                settings = json.load(f)
+        else:
+            settings = {"guilds": {}}
+            
+        # Create nested structure if not exists
+        if guild_id not in settings.get("guilds", {}):
+            settings["guilds"][guild_id] = {}
+            
+        if "logging" not in settings["guilds"][guild_id]:
+            settings["guilds"][guild_id]["logging"] = {}
+            
+        # Set the log channel
+        settings["guilds"][guild_id]["logging"]["log_channel_id"] = channel_id
+        
+        # Save settings
+        with open(SETTINGS_FILE, "w") as f:
+            json.dump(settings, f, indent=2)
     
     async def log_to_file(self, guild_id, guild_name, title, description):
         """Write log entry to file"""

@@ -5,19 +5,21 @@ import json
 import os
 from datetime import datetime
 
+# Data files - keep these separate as they contain actual user data
 SERVER_MOOD_FILE = "server_mood_data.json"
 USER_MOOD_FILE = "user_mood_data.json"
-CONFIG_FILE = "mental_health_config.json"
 MOOD_DATES_FILE = "mood_dates.json"
 
-# Load server-wide mood data
+# Centralized settings file
+SETTINGS_FILE = "server_settings.json"
+
+# Load mood data files
 if os.path.exists(SERVER_MOOD_FILE):
     with open(SERVER_MOOD_FILE, "r") as f:
         server_mood_data = json.load(f)
 else:
     server_mood_data = {}
 
-# Load user mood data
 if os.path.exists(USER_MOOD_FILE):
     with open(USER_MOOD_FILE, "r") as f:
         user_mood_data = json.load(f)
@@ -30,20 +32,48 @@ if os.path.exists(MOOD_DATES_FILE):
 else:
     mood_dates_data = {}
 
-# Load configuration
-if os.path.exists(CONFIG_FILE):
-    with open(CONFIG_FILE, "r") as f:
-        config_data = json.load(f)
+# Load settings
+if os.path.exists(SETTINGS_FILE):
+    with open(SETTINGS_FILE, "r") as f:
+        settings_data = json.load(f)
 else:
-    config_data = {"channels": [], "ping_roles": [], "frequency": 24, "check_enabled": False}
+    settings_data = {
+        "guilds": {},
+        "global": {
+            "mental_health": {
+                "channels": [],
+                "ping_roles": [],
+                "frequency": 24,
+                "check_enabled": False
+            }
+        }
+    }
+
+# Helper function to get mental health settings
+def get_mental_health_settings():
+    if "global" not in settings_data:
+        settings_data["global"] = {}
+    
+    if "mental_health" not in settings_data["global"]:
+        settings_data["global"]["mental_health"] = {
+            "channels": [],
+            "ping_roles": [],
+            "frequency": 24,
+            "check_enabled": False
+        }
+        
+    return settings_data["global"]["mental_health"]
 
 class Slash_Mental(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.check_enabled = config_data.get("check_enabled", False)
-        self.channel_ids = config_data.get("channels", [])
-        self.ping_roles = config_data.get("ping_roles", [])
-        self.frequency = config_data.get("frequency", 24)
+        
+        # Get settings from centralized file
+        mental_health_settings = get_mental_health_settings()
+        self.check_enabled = mental_health_settings.get("check_enabled", False)
+        self.channel_ids = mental_health_settings.get("channels", [])
+        self.ping_roles = mental_health_settings.get("ping_roles", [])
+        self.frequency = mental_health_settings.get("frequency", 24)
 
     def is_admin(self, interaction: discord.Interaction):
         return interaction.user.guild_permissions.administrator
@@ -54,8 +84,9 @@ class Slash_Mental(commands.Cog):
             await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
             return
         self.check_enabled = True
-        config_data["check_enabled"] = True
-        self.save_config()
+        mental_health_settings = get_mental_health_settings()
+        mental_health_settings["check_enabled"] = True
+        self.save_settings()
         await interaction.response.send_message("Mental health check enabled.")
 
     @app_commands.command(name="disable", description="Disable mental health check")
@@ -64,8 +95,9 @@ class Slash_Mental(commands.Cog):
             await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
             return
         self.check_enabled = False
-        config_data["check_enabled"] = False
-        self.save_config()
+        mental_health_settings = get_mental_health_settings()
+        mental_health_settings["check_enabled"] = False
+        self.save_settings()
         await interaction.response.send_message("Mental health check disabled.")
 
     @app_commands.command(name="addchannel", description="Add channel to send mental health check messages")
@@ -75,8 +107,9 @@ class Slash_Mental(commands.Cog):
             return
         if channel.id not in self.channel_ids:
             self.channel_ids.append(channel.id)
-            config_data["channels"] = self.channel_ids
-            self.save_config()
+            mental_health_settings = get_mental_health_settings()
+            mental_health_settings["channels"] = self.channel_ids
+            self.save_settings()
             await interaction.response.send_message(f"Mental health check messages will also be sent to {channel.mention}.")
         else:
             await interaction.response.send_message(f"Channel {channel.mention} is already in the list.")
@@ -88,8 +121,9 @@ class Slash_Mental(commands.Cog):
             return
         if channel.id in self.channel_ids:
             self.channel_ids.remove(channel.id)
-            config_data["channels"] = self.channel_ids
-            self.save_config()
+            mental_health_settings = get_mental_health_settings()
+            mental_health_settings["channels"] = self.channel_ids
+            self.save_settings()
             await interaction.response.send_message(f"Channel {channel.mention} has been removed from the list.")
         else:
             await interaction.response.send_message(f"Channel {channel.mention} is not in the list.")
@@ -103,8 +137,9 @@ class Slash_Mental(commands.Cog):
             await interaction.response.send_message("Frequency must be at least 1 hour.", ephemeral=True)
         else:
             self.frequency = hours
-            config_data["frequency"] = hours
-            self.save_config()
+            mental_health_settings = get_mental_health_settings()
+            mental_health_settings["frequency"] = hours
+            self.save_settings()
             await interaction.response.send_message(f"Mental health check frequency set to every {hours} hours.")
 
     @app_commands.command(name="stats", description="Get the stats for the server's mental health responses")
@@ -162,18 +197,10 @@ class Slash_Mental(commands.Cog):
         mood_dates_data[guild_id][user_id].append(mood_record)
 
         # Save data back to files
-        with open(SERVER_MOOD_FILE, "w") as f:
-            json.dump(server_mood_data, f, indent=4)
-
-        with open(USER_MOOD_FILE, "w") as f:
-            json.dump(user_mood_data, f, indent=4)
-
-        with open(MOOD_DATES_FILE, "w") as f:
-            json.dump(mood_dates_data, f, indent=4)
+        self.save_mood_data()
 
         # Send response only to the user who used the command (ephemeral message)
         await interaction.response.send_message(f"Thank you for responding! Your mood ({mood}) has been recorded.", ephemeral=True)
-
 
     async def handle_others(self, interaction, guild_id, user_id):
         if "others" not in server_mood_data[guild_id]:
@@ -197,16 +224,28 @@ class Slash_Mental(commands.Cog):
                 server_mood_data[guild_id]["others"][mood_description] += 1
 
             if mood_description not in user_mood_data[user_id]["others"]:
-                user_mood_data[user_id]["others"][mood_description] = 1
+                user_mood_data[user_id]["others"] = 1
             else:
-                user_mood_data[user_id]["others"][mood_description] += 1
+                user_mood_data[user_id]["others"] += 1
 
         except:
             await interaction.response.send_message("No response received, mood not recorded.", ephemeral=True)
 
-    def save_config(self):
-        with open(CONFIG_FILE, "w") as f:
-            json.dump(config_data, f, indent=4)
+    def save_settings(self):
+        """Save settings to centralized settings file"""
+        with open(SETTINGS_FILE, "w") as f:
+            json.dump(settings_data, f, indent=4)
+    
+    def save_mood_data(self):
+        """Save mood data to separate files"""
+        with open(SERVER_MOOD_FILE, "w") as f:
+            json.dump(server_mood_data, f, indent=4)
+
+        with open(USER_MOOD_FILE, "w") as f:
+            json.dump(user_mood_data, f, indent=4)
+
+        with open(MOOD_DATES_FILE, "w") as f:
+            json.dump(mood_dates_data, f, indent=4)
 
 async def setup(bot):
     await bot.add_cog(Slash_Mental(bot))

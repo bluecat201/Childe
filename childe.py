@@ -19,6 +19,8 @@ DEFAULT_PREFIX = "!"
 PREFIX_FILE = "prefixes.json"
 WARNINGS_FILE = "warnings.json"
 
+SETTINGS_FILE = "server_settings.json"
+
 # Function to get the current version from git commit
 def get_version():
     try:
@@ -34,27 +36,29 @@ def get_version():
 CURRENT_VERSION = "0.3.4"
 
 # Načítání prefixů ze souboru
-if os.path.exists(PREFIX_FILE):
-    with open(PREFIX_FILE, "r") as f:
+if os.path.exists(SETTINGS_FILE):
+    with open(SETTINGS_FILE, "r") as f:
         custom_prefixes = json.load(f)
 else:
     custom_prefixes = {}
 
 async def determine_prefix(bot, message):
-    if not message.guild: 
+    if not message.guild:
         return DEFAULT_PREFIX
 
     guild_id = str(message.guild.id)
     
-    # Načtení prefixů
-    if os.path.exists(PREFIX_FILE):
-        with open(PREFIX_FILE, "r") as f:
-            prefixes = json.load(f)
+    # Load settings file
+    if os.path.exists(SETTINGS_FILE):
+        with open(SETTINGS_FILE, "r") as f:
+            settings = json.load(f)
     else:
-        prefixes = {}
+        settings = {"guilds": {}}
 
-    # Vrátí uložený prefix nebo výchozí, pokud neexistuje
-    return prefixes.get(guild_id, DEFAULT_PREFIX)
+    # Navigate the nested structure to find the prefix
+    # First get the guild dict, then get the prefix from that guild
+    prefix = settings.get("guilds", {}).get(guild_id, {}).get("prefix", DEFAULT_PREFIX)
+    return prefix
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -330,6 +334,36 @@ async def state(ctx):
         except Exception as e:
             await ctx.send(f"Error: {str(e)}")
 
+#prefix command
+@bot.command(name="prefix")
+@commands.has_permissions(administrator=True)
+async def change_prefix(ctx, prefix: str):
+    if not prefix:
+        await ctx.send("You need to specify a prefix.")
+        return
+        
+    guild_id = str(ctx.guild.id)
+    
+    # Load settings
+    if os.path.exists(SETTINGS_FILE):
+        with open(SETTINGS_FILE, "r") as f:
+            settings = json.load(f)
+    else:
+        settings = {"guilds": {}}
+    
+    # Ensure guild exists in settings
+    if guild_id not in settings.get("guilds", {}):
+        settings["guilds"][guild_id] = {}
+    
+    # Update prefix
+    settings["guilds"][guild_id]["prefix"] = prefix
+    
+    # Save settings
+    with open(SETTINGS_FILE, "w") as f:
+        json.dump(settings, f, indent=2)
+    
+    await ctx.send(f"Prefix changed to: `{prefix}`")
+
 #|výstup do konzole|
 
 #logace připojení uživatele
@@ -394,3 +428,4 @@ async def on_message_delete(message):
 
 #bot.ipc.start()
 bot.run(TOKEN)
+``` 

@@ -4,10 +4,13 @@ import json
 import os
 from datetime import datetime, timedelta
 
+# Data files - keep these separate as they contain actual user data, not config
 SERVER_MOOD_FILE = "server_mood_data.json"
 USER_MOOD_FILE = "user_mood_data.json"
-CONFIG_FILE = "mental_health_config.json"
 MOOD_DATES_FILE = "mood_dates.json"
+
+# Centralized settings file
+SETTINGS_FILE = "server_settings.json"
 
 # Load server-wide mood data
 if os.path.exists(SERVER_MOOD_FILE):
@@ -29,20 +32,50 @@ if os.path.exists(MOOD_DATES_FILE):
 else:
     mood_dates_data = {}
 
-# Load configuration
-if os.path.exists(CONFIG_FILE):
-    with open(CONFIG_FILE, "r") as f:
-        config_data = json.load(f)
+# Load settings
+if os.path.exists(SETTINGS_FILE):
+    with open(SETTINGS_FILE, "r") as f:
+        settings_data = json.load(f)
 else:
-    config_data = {"channels": [], "ping_roles": [], "frequency": 24, "check_enabled": False}
+    settings_data = {
+        "guilds": {},
+        "global": {
+            "mental_health": {
+                "channels": [],
+                "ping_roles": [],
+                "frequency": 24,
+                "check_enabled": False
+            }
+        }
+    }
+
+# Helper function for mental health settings
+def get_mental_health_settings():
+    if "global" not in settings_data:
+        settings_data["global"] = {}
+    
+    if "mental_health" not in settings_data["global"]:
+        settings_data["global"]["mental_health"] = {
+            "channels": [],
+            "ping_roles": [],
+            "frequency": 24,
+            "check_enabled": False
+        }
+        
+    return settings_data["global"]["mental_health"]
 
 class MentalHealthCheck(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.check_enabled = config_data.get("check_enabled", False)
-        self.channel_ids = config_data.get("channels", [])
-        self.ping_roles = config_data.get("ping_roles", [])
-        self.frequency = config_data.get("frequency", 24)
+        
+        # Get settings from centralized file
+        mental_health_settings = get_mental_health_settings()
+        self.check_enabled = mental_health_settings.get("check_enabled", False)
+        self.channel_ids = mental_health_settings.get("channels", [])
+        self.ping_roles = mental_health_settings.get("ping_roles", [])
+        self.frequency = mental_health_settings.get("frequency", 24)
+        
+        # Start check loop
         self.check_loop.start()
 
     def cog_unload(self):
@@ -63,9 +96,12 @@ class MentalHealthCheck(commands.Cog):
         if not self.is_admin(ctx):
             await ctx.send("You do not have permission to use this command.")
             return
+        
         self.check_enabled = True
-        config_data["check_enabled"] = True
-        self.save_config()
+        mental_health_settings = get_mental_health_settings()
+        mental_health_settings["check_enabled"] = True
+        self.save_settings()
+        
         await ctx.send("Mental health check enabled.")
 
     @mentalhealth.command(name="disable")
@@ -73,9 +109,12 @@ class MentalHealthCheck(commands.Cog):
         if not self.is_admin(ctx):
             await ctx.send("You do not have permission to use this command.")
             return
+            
         self.check_enabled = False
-        config_data["check_enabled"] = False
-        self.save_config()
+        mental_health_settings = get_mental_health_settings()
+        mental_health_settings["check_enabled"] = False
+        self.save_settings()
+        
         await ctx.send("Mental health check disabled.")
 
     @mentalhealth.command(name="addchannel")
@@ -83,10 +122,13 @@ class MentalHealthCheck(commands.Cog):
         if not self.is_admin(ctx):
             await ctx.send("You do not have permission to use this command.")
             return
+            
         if channel.id not in self.channel_ids:
             self.channel_ids.append(channel.id)
-            config_data["channels"] = self.channel_ids
-            self.save_config()
+            mental_health_settings = get_mental_health_settings()
+            mental_health_settings["channels"] = self.channel_ids
+            self.save_settings()
+            
             await ctx.send(f"Mental health check messages will also be sent to {channel.mention}.")
         else:
             await ctx.send(f"Channel {channel.mention} is already in the list.")
@@ -96,10 +138,13 @@ class MentalHealthCheck(commands.Cog):
         if not self.is_admin(ctx):
             await ctx.send("You do not have permission to use this command.")
             return
+            
         if channel.id in self.channel_ids:
             self.channel_ids.remove(channel.id)
-            config_data["channels"] = self.channel_ids
-            self.save_config()
+            mental_health_settings = get_mental_health_settings()
+            mental_health_settings["channels"] = self.channel_ids
+            self.save_settings()
+            
             await ctx.send(f"Channel {channel.mention} has been removed from the list.")
         else:
             await ctx.send(f"Channel {channel.mention} is not in the list.")
@@ -109,12 +154,15 @@ class MentalHealthCheck(commands.Cog):
         if not self.is_admin(ctx):
             await ctx.send("You do not have permission to use this command.")
             return
+            
         if hours < 1:
             await ctx.send("Frequency must be at least 1 hour.")
         else:
             self.frequency = hours
-            config_data["frequency"] = hours
-            self.save_config()
+            mental_health_settings = get_mental_health_settings()
+            mental_health_settings["frequency"] = hours
+            self.save_settings()
+            
             await ctx.send(f"Mental health check frequency set to every {hours} hours.")
 
     @mentalhealth.command(name="addping")
@@ -122,10 +170,13 @@ class MentalHealthCheck(commands.Cog):
         if not self.is_admin(ctx):
             await ctx.send("You do not have permission to use this command.")
             return
+            
         if role.id not in self.ping_roles:
             self.ping_roles.append(role.id)
-            config_data["ping_roles"] = self.ping_roles
-            self.save_config()
+            mental_health_settings = get_mental_health_settings()
+            mental_health_settings["ping_roles"] = self.ping_roles
+            self.save_settings()
+            
             await ctx.send(f"Role {role.mention} will now be pinged during mental health check messages.")
         else:
             await ctx.send(f"Role {role.mention} is already in the ping list.")
@@ -135,10 +186,13 @@ class MentalHealthCheck(commands.Cog):
         if not self.is_admin(ctx):
             await ctx.send("You do not have permission to use this command.")
             return
+            
         if role.id in self.ping_roles:
             self.ping_roles.remove(role.id)
-            config_data["ping_roles"] = self.ping_roles
-            self.save_config()
+            mental_health_settings = get_mental_health_settings() 
+            mental_health_settings["ping_roles"] = self.ping_roles
+            self.save_settings()
+            
             await ctx.send(f"Role {role.mention} has been removed from the ping list.")
         else:
             await ctx.send(f"Role {role.mention} is not in the ping list.")
@@ -154,7 +208,12 @@ class MentalHealthCheck(commands.Cog):
         guild_stats = server_mood_data[guild_id]
         response = f"Mental Health Check Stats:\n"
         for mood, count in guild_stats.items():
-            response += f"{mood}: {count}\n"
+            if isinstance(count, dict):  # Handle "others" category
+                response += f"{mood}:\n"
+                for custom_mood, custom_count in count.items():
+                    response += f"  - {custom_mood}: {custom_count}\n"
+            else:
+                response += f"{mood}: {count}\n"
         
         await ctx.send(response)
 
@@ -178,22 +237,22 @@ class MentalHealthCheck(commands.Cog):
                 )
         await ctx.send("Mental health check message has been sent manually.")
 
-    # @tasks.loop(hours=1)
-    # async def check_loop(self):
-    #     if not self.check_enabled or not self.channel_ids:
-    #         return
+    @tasks.loop(hours=1)
+    async def check_loop(self):
+        if not self.check_enabled or not self.channel_ids:
+            return
 
-    #     now = datetime.utcnow()
-    #     if (now.hour % self.frequency) == 0:
-    #         ping_roles_mentions = " ".join([f"<@&{role_id}>" for role_id in self.ping_roles])
-    #         for channel_id in self.channel_ids:
-    #             channel = self.bot.get_channel(channel_id)
-    #             if channel:
-    #                 await channel.send(
-    #                     f"{ping_roles_mentions}\nThis is your mental health check-in! \n"
-    #                     "How are you feeling today? Use the command `/mentalhealth respond [mood]` to let us know. \n"
-    #                     "Available options: happy, sad, stressed, calm, tired, motivated, or others."
-    #                 )
+        now = datetime.utcnow()
+        if (now.hour % self.frequency) == 0:
+            ping_roles_mentions = " ".join([f"<@&{role_id}>" for role_id in self.ping_roles])
+            for channel_id in self.channel_ids:
+                channel = self.bot.get_channel(channel_id)
+                if channel:
+                    await channel.send(
+                        f"{ping_roles_mentions}\nThis is your mental health check-in! \n"
+                        "How are you feeling today? Use the command `/mentalhealth respond [mood]` to let us know. \n"
+                        "Available options: happy, sad, stressed, calm, tired, motivated, or others."
+                    )
 
     @mentalhealth.command(name="respond")
     async def respond(self, ctx, mood: str):
@@ -235,14 +294,7 @@ class MentalHealthCheck(commands.Cog):
         mood_dates_data[guild_id][user_id].append(mood_record)
 
         # Save the data back to the file
-        with open(SERVER_MOOD_FILE, "w") as f:
-            json.dump(server_mood_data, f, indent=4)
-
-        with open(USER_MOOD_FILE, "w") as f:
-            json.dump(user_mood_data, f, indent=4)
-
-        with open(MOOD_DATES_FILE, "w") as f:
-            json.dump(mood_dates_data, f, indent=4)
+        self.save_mood_data()
 
         await ctx.send(f"Thank you for responding! Your mood ({mood}) has been recorded.")
 
@@ -284,12 +336,29 @@ class MentalHealthCheck(commands.Cog):
         user_stats = user_mood_data[user_id]
         response = f"Your Mental Health Stats:\n"
         for mood, count in user_stats.items():
-            response += f"{mood}: {count}\n"
+            if isinstance(count, dict):  # Handle "others" category
+                response += f"{mood}:\n"
+                for custom_mood, custom_count in count.items():
+                    response += f"  - {custom_mood}: {custom_count}\n"
+            else:
+                response += f"{mood}: {count}\n"
         await ctx.send(response)
         
-    def save_config(self):
-        with open(CONFIG_FILE, "w") as f:
-            json.dump(config_data, f, indent=4)
+    def save_settings(self):
+        """Save settings to the centralized settings file"""
+        with open(SETTINGS_FILE, "w") as f:
+            json.dump(settings_data, f, indent=4)
+    
+    def save_mood_data(self):
+        """Save mood data to their respective files"""
+        with open(SERVER_MOOD_FILE, "w") as f:
+            json.dump(server_mood_data, f, indent=4)
+
+        with open(USER_MOOD_FILE, "w") as f:
+            json.dump(user_mood_data, f, indent=4)
+
+        with open(MOOD_DATES_FILE, "w") as f:
+            json.dump(mood_dates_data, f, indent=4)
 
 async def setup(bot):
     await bot.add_cog(MentalHealthCheck(bot))

@@ -5,8 +5,8 @@ import asyncio
 import json
 import os
 
-PREFIX_FILE = "prefixes.json"
-WARNINGS_FILE = "warnings.json"
+SETTINGS_FILE = "server_settings.json"
+WARNINGS_FILE = "warnings.json"  # Keep for backwards compatibility during transition
 
 class SlashModeration(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -86,22 +86,29 @@ class SlashModeration(commands.Cog):
         except ValueError:
             await interaction.response.send_message("Nesprávně zadaný čas!", ephemeral=True)
 
-    # Set prefix
+    # Set prefix - updated for centralized settings
     @app_commands.command(name="setprefix", description="Nastaví prefix bota")
     @app_commands.checks.has_permissions(manage_messages=True)
     async def setprefix(self, interaction: discord.Interaction, prefix: str):
         guild_id = str(interaction.guild.id)
         
-        if os.path.exists(PREFIX_FILE):
-            with open(PREFIX_FILE, "r") as f:
-                prefixes = json.load(f)
+        # Load settings file
+        if os.path.exists(SETTINGS_FILE):
+            with open(SETTINGS_FILE, "r") as f:
+                settings = json.load(f)
         else:
-            prefixes = {}
-
-        prefixes[guild_id] = prefix
-
-        with open(PREFIX_FILE, "w") as f:
-            json.dump(prefixes, f, indent=4)
+            settings = {"guilds": {}}
+            
+        # Create guild entry if it doesn't exist
+        if guild_id not in settings["guilds"]:
+            settings["guilds"][guild_id] = {}
+        
+        # Set prefix in the new structure
+        settings["guilds"][guild_id]["prefix"] = prefix
+        
+        # Save back to centralized settings file
+        with open(SETTINGS_FILE, "w") as f:
+            json.dump(settings, f, indent=2)
 
         await interaction.response.send_message(f"Prefix nastaven na: {prefix}")
 

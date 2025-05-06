@@ -4,14 +4,15 @@ from discord.ext import commands
 import json
 import os
 
-PREFIX_FILE = "prefixes.json"
+SETTINGS_FILE = "server_settings.json"
+# Keep WARNINGS_FILE for backwards compatibility during transition
 WARNINGS_FILE = "warnings.json"
 
 class Moderace(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-        # Načítání warnů
+        # Načítání warnů - eventually these should be migrated to settings file
         if os.path.exists(WARNINGS_FILE):
             with open(WARNINGS_FILE, "r") as f:
                 self.warnings = json.load(f)
@@ -122,29 +123,32 @@ class Moderace(commands.Cog):
             await ctx.send(embed=unmute_embed)
             await member.send(f" Byl jsi unmutnut v: {guild.name}")
 
-
-    #Set prefix
+    #Set prefix - updated to use centralized settings
     @commands.command(aliases=["Setprefix", "SETPREFIX"], help="Nastaví prefix bota")
     @commands.has_permissions(manage_messages=True)
     async def setprefix(self, ctx, *, prefix=None):
         if not prefix:
             return await ctx.send("Musíte zadat nový prefix.")
 
-        guild_id = str(ctx.guild.id)  # Ukládáme ID jako string
-
-        # Načíst existující prefixy
-        if os.path.exists(PREFIX_FILE):
-            with open(PREFIX_FILE, "r") as f:
-                prefixes = json.load(f)
+        guild_id = str(ctx.guild.id)
+        
+        # Load settings file
+        if os.path.exists(SETTINGS_FILE):
+            with open(SETTINGS_FILE, "r") as f:
+                settings = json.load(f)
         else:
-            prefixes = {}
+            settings = {"guilds": {}}
 
-        # Přepsání nebo přidání prefixu
-        prefixes[guild_id] = prefix
+        # Create guild entry if it doesn't exist
+        if guild_id not in settings["guilds"]:
+            settings["guilds"][guild_id] = {}
+        
+        # Set prefix in the new structure
+        settings["guilds"][guild_id]["prefix"] = prefix
 
-        # Uložení zpět do souboru
-        with open(PREFIX_FILE, "w") as f:
-            json.dump(prefixes, f, indent=4)  # Použijte indentaci pro přehlednější JSON
+        # Save back to centralized settings file
+        with open(SETTINGS_FILE, "w") as f:
+            json.dump(settings, f, indent=2)
 
         await ctx.send(f"Prefix nastaven na: {prefix}")
     

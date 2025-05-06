@@ -5,46 +5,82 @@ import random
 import json
 import os
 
-# Načtení nebo inicializace dat
-LEVELING_FILE = "leveling.json"
-IGNORED_CHANNELS_FILE = "ignored_channels.json"
-LEVEL_UP_CHANNELS_FILE = "level_up_channels.json"
-LEVELING_ENABLED_FILE = "leveling_enabled.json"
-MENTION_PREFS_FILE = "mention_prefs.json"
+# Centralized settings file
+SETTINGS_FILE = "server_settings.json"
+LEVELING_FILE = "leveling.json"  # Keep separate file for XP data
 
+# Load XP data
 if os.path.exists(LEVELING_FILE):
     with open(LEVELING_FILE, "r") as f:
         leveling_data = json.load(f)
 else:
     leveling_data = {}
 
-if os.path.exists(IGNORED_CHANNELS_FILE):
-    with open(IGNORED_CHANNELS_FILE, "r") as f:
-        ignored_channels = json.load(f)
+# Load settings data
+if os.path.exists(SETTINGS_FILE):
+    with open(SETTINGS_FILE, "r") as f:
+        settings_data = json.load(f)
 else:
-    ignored_channels = {}
+    settings_data = {"guilds": {}, "users": {}}
 
-if os.path.exists(LEVEL_UP_CHANNELS_FILE):
-    with open(LEVEL_UP_CHANNELS_FILE, "r") as f:
-        level_up_channels = json.load(f)
-else:
-    level_up_channels = {}
+# Helper functions for settings management
+def get_guild_settings(guild_id):
+    """Get guild settings, creating default structure if needed"""
+    guild_id = str(guild_id)
+    if guild_id not in settings_data["guilds"]:
+        settings_data["guilds"][guild_id] = {}
+    
+    return settings_data["guilds"][guild_id]
 
-if os.path.exists(LEVELING_ENABLED_FILE):
-    with open(LEVELING_ENABLED_FILE, "r") as f:
-        leveling_enabled = json.load(f)
-else:
-    leveling_enabled = {}
+def is_leveling_enabled(guild_id):
+    """Check if leveling is enabled for a guild"""
+    guild_id = str(guild_id)
+    guild_settings = get_guild_settings(guild_id)
+    
+    if "leveling" not in guild_settings:
+        guild_settings["leveling"] = {"enabled": True}
+        
+    return guild_settings["leveling"].get("enabled", True)
 
-if os.path.exists(MENTION_PREFS_FILE):
-    with open(MENTION_PREFS_FILE, "r") as f:
-        mention_prefs = json.load(f)
-else:
-    mention_prefs = {}
+def is_channel_ignored(guild_id, channel_id):
+    """Check if a channel is in the ignored list"""
+    guild_id = str(guild_id)
+    channel_id = str(channel_id)
+    guild_settings = get_guild_settings(guild_id)
+    
+    return channel_id in guild_settings.get("ignored_channels", [])
 
-async def save_data(file_path, data):
-    with open(file_path, "w") as f:
-        json.dump(data, f, indent=4)
+def get_level_up_channel(guild_id):
+    """Get the level up announcement channel for a guild"""
+    guild_id = str(guild_id)
+    guild_settings = get_guild_settings(guild_id)
+    
+    if "leveling" not in guild_settings:
+        guild_settings["leveling"] = {}
+        
+    return guild_settings["leveling"].get("level_up_channel_id")
+
+def get_mention_preference(user_id):
+    """Get mention preference for a user"""
+    user_id = str(user_id)
+    
+    if "users" not in settings_data:
+        settings_data["users"] = {}
+        
+    if user_id not in settings_data["users"]:
+        settings_data["users"][user_id] = {}
+        
+    return settings_data["users"][user_id].get("mention_on_levelup", True)
+
+async def save_settings():
+    """Save settings to centralized file"""
+    with open(SETTINGS_FILE, "w") as f:
+        json.dump(settings_data, f, indent=4)
+
+async def save_leveling_data():
+    """Save XP data to separate file"""
+    with open(LEVELING_FILE, "w") as f:
+        json.dump(leveling_data, f, indent=4)
 
 class LevelingSlash(commands.Cog):
     def __init__(self, bot):
@@ -55,13 +91,15 @@ class LevelingSlash(commands.Cog):
     async def set_ignore_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
         guild_id = str(interaction.guild.id)
         channel_id = str(channel.id)
-
-        if guild_id not in ignored_channels:
-            ignored_channels[guild_id] = []
-
-        if channel_id not in ignored_channels[guild_id]:
-            ignored_channels[guild_id].append(channel_id)
-            await save_data(IGNORED_CHANNELS_FILE, ignored_channels)
+        
+        guild_settings = get_guild_settings(guild_id)
+        
+        if "ignored_channels" not in guild_settings:
+            guild_settings["ignored_channels"] = []
+            
+        if channel_id not in guild_settings["ignored_channels"]:
+            guild_settings["ignored_channels"].append(channel_id)
+            await save_settings()
             await interaction.response.send_message(f"Kanál {channel.mention} byl přidán do seznamu ignorovaných.")
         else:
             await interaction.response.send_message("Tento kanál je již ignorován.")
@@ -71,10 +109,12 @@ class LevelingSlash(commands.Cog):
     async def remove_ignore_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
         guild_id = str(interaction.guild.id)
         channel_id = str(channel.id)
-
-        if guild_id in ignored_channels and channel_id in ignored_channels[guild_id]:
-            ignored_channels[guild_id].remove(channel_id)
-            await save_data(IGNORED_CHANNELS_FILE, ignored_channels)
+        
+        guild_settings = get_guild_settings(guild_id)
+        
+        if "ignored_channels" in guild_settings and channel_id in guild_settings["ignored_channels"]:
+            guild_settings["ignored_channels"].remove(channel_id)
+            await save_settings()
             await interaction.response.send_message(f"Kanál {channel.mention} byl odebrán ze seznamu ignorovaných.")
         else:
             await interaction.response.send_message("Tento kanál není ignorován.")
@@ -83,17 +123,24 @@ class LevelingSlash(commands.Cog):
     @app_commands.checks.has_permissions(administrator=True)
     async def set_level_up_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
         guild_id = str(interaction.guild.id)
-        level_up_channels[guild_id] = str(channel.id)
-        await save_data(LEVEL_UP_CHANNELS_FILE, level_up_channels)
+        guild_settings = get_guild_settings(guild_id)
+        
+        if "leveling" not in guild_settings:
+            guild_settings["leveling"] = {}
+            
+        guild_settings["leveling"]["level_up_channel_id"] = str(channel.id)
+        await save_settings()
         await interaction.response.send_message(f"Kanál {channel.mention} byl nastaven pro oznámení o zvýšení úrovně.")
 
     @app_commands.command(name="reset_level_up_channel", description="Resetuje kanál pro oznámení o zvýšení úrovně.")
     @app_commands.checks.has_permissions(administrator=True)
     async def reset_level_up_channel(self, interaction: discord.Interaction):
         guild_id = str(interaction.guild.id)
-        if guild_id in level_up_channels:
-            del level_up_channels[guild_id]
-            await save_data(LEVEL_UP_CHANNELS_FILE, level_up_channels)
+        guild_settings = get_guild_settings(guild_id)
+        
+        if "leveling" in guild_settings and "level_up_channel_id" in guild_settings["leveling"]:
+            del guild_settings["leveling"]["level_up_channel_id"]
+            await save_settings()
             await interaction.response.send_message("Kanál pro oznámení o zvýšení úrovně byl resetován.")
         else:
             await interaction.response.send_message("Kanál pro oznámení nebyl nastaven.")
@@ -102,11 +149,16 @@ class LevelingSlash(commands.Cog):
     @app_commands.checks.has_permissions(administrator=True)
     async def toggle_leveling(self, interaction: discord.Interaction):
         guild_id = str(interaction.guild.id)
-        current_state = leveling_enabled.get(guild_id, True)
-        leveling_enabled[guild_id] = not current_state
-        await save_data(LEVELING_ENABLED_FILE, leveling_enabled)
+        guild_settings = get_guild_settings(guild_id)
+        
+        if "leveling" not in guild_settings:
+            guild_settings["leveling"] = {}
+            
+        current_state = guild_settings["leveling"].get("enabled", True)
+        guild_settings["leveling"]["enabled"] = not current_state
+        await save_settings()
 
-        state_message = "zapnutý" if leveling_enabled[guild_id] else "vypnutý"
+        state_message = "zapnutý" if guild_settings["leveling"]["enabled"] else "vypnutý"
         await interaction.response.send_message(f"Levelovací systém byl nyní {state_message}.")
 
     @app_commands.command(name="leaderboard", description="Zobrazí top 10 hráčů.")
@@ -142,11 +194,18 @@ class LevelingSlash(commands.Cog):
     @app_commands.command(name="toggle_mention", description="Přepíná označení při zvýšení úrovně.")
     async def toggle_mention(self, interaction: discord.Interaction):
         user_id = str(interaction.user.id)
-        current_pref = mention_prefs.get(user_id, True)
-        mention_prefs[user_id] = not current_pref
-        await save_data(MENTION_PREFS_FILE, mention_prefs)
-
-        state_message = "zapnuto" if mention_prefs[user_id] else "vypnuto"
+        
+        if "users" not in settings_data:
+            settings_data["users"] = {}
+            
+        if user_id not in settings_data["users"]:
+            settings_data["users"][user_id] = {}
+            
+        current_pref = settings_data["users"][user_id].get("mention_on_levelup", True)
+        settings_data["users"][user_id]["mention_on_levelup"] = not current_pref
+        await save_settings()
+        
+        state_message = "zapnuto" if settings_data["users"][user_id]["mention_on_levelup"] else "vypnuto"
         await interaction.response.send_message(f"Označení při zvýšení úrovně bylo nyní {state_message}.")
 
 async def setup(bot):
