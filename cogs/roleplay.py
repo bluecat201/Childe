@@ -113,7 +113,7 @@ class Roleplay(commands.Cog, name="Roleplay"):
             await self.fetch_neko_action(ctx, description, "kiss")
 
     #laugh
-    @commands.command(aliases=['Laugh','LAUGH'], help='You're laughing.')
+    @commands.command(aliases=['Laugh','LAUGH'], help='You are laughing.')
     async def laugh(self, ctx):
         description = f"{ctx.author.mention} she laughs."
         await self.fetch_neko_action(ctx, description, "laugh")
@@ -185,7 +185,7 @@ class Roleplay(commands.Cog, name="Roleplay"):
             await self.fetch_neko_action(ctx, description, "stare")
 
     #think
-    @commands.command(aliases=['Think','THINK'], help='You're thinking.')
+    @commands.command(aliases=['Think','THINK'], help='You are thinking.')
     async def think(self, ctx):
         description = f"{ctx.author.mention} is thinking"
         await self.fetch_neko_action(ctx, description, "think")
