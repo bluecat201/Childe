@@ -76,7 +76,7 @@ class QOTD_slash(commands.Cog):
             self.qotd_data = await load_qotd_data()
 
     # Slash příkaz: Přidání otázky
-    @app_commands.command(name="addquestion", description="Přidá otázku do seznamu QOTD.")
+    @app_commands.command(name="addquestion", description="Adds question to the list.")
     async def add_question(self, interaction: discord.Interaction, question: str):
         guild_id = str(interaction.guild.id)
         if guild_id not in self.qotd_data["guilds"]:
@@ -84,10 +84,10 @@ class QOTD_slash(commands.Cog):
 
         self.qotd_data["guilds"][guild_id]["questions"].append(question)
         await save_qotd_data(self.qotd_data)
-        await interaction.response.send_message(f"Otázka byla přidána: {question}", ephemeral=True)
+        await interaction.response.send_message(f"Added question: {question}", ephemeral=True)
 
     # Slash příkaz: Manuální odeslání otázky
-    @app_commands.command(name="sendqotd", description="Manuálně odešle otázku dne.")
+    @app_commands.command(name="sendqotd", description="Sends the question of the day.")
     @app_commands.checks.has_permissions(manage_guild=True)
     async def send_qotd(self, interaction: discord.Interaction):
         guild_id = str(interaction.guild.id)
@@ -96,7 +96,7 @@ class QOTD_slash(commands.Cog):
         questions = guild_data.get("questions", [])
 
         if not channel_id or not questions:
-            await interaction.response.send_message("Nebyla nastavena žádná místnost nebo otázky.", ephemeral=True)
+            await interaction.response.send_message("No channel, or no questions have been set!", ephemeral=True)
             return
 
         # Convert to int if it's a string
@@ -105,7 +105,7 @@ class QOTD_slash(commands.Cog):
             
         channel = self.bot.get_channel(channel_id)
         if not channel:
-            await interaction.response.send_message("Zadaná místnost neexistuje.", ephemeral=True)
+            await interaction.response.send_message("This channel doesn't exist!", ephemeral=True)
             return
 
         question = questions.pop(0)
@@ -113,10 +113,10 @@ class QOTD_slash(commands.Cog):
 
         await channel.send(f"{ping or ''} **Question of the Day:** {question}")
         await save_qotd_data(self.qotd_data)
-        await interaction.response.send_message("Otázka dne byla odeslána.", ephemeral=True)
+        await interaction.response.send_message("The QOTD has been sent!", ephemeral=True)
 
     # Slash příkaz: Nastavení místnosti
-    @app_commands.command(name="setqotdchannel", description="Nastaví místnost pro QOTD.")
+    @app_commands.command(name="setqotdchannel", description="Sets the room for QOTD.")
     @app_commands.checks.has_permissions(manage_guild=True)
     async def set_qotd_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
         guild_id = str(interaction.guild.id)
@@ -125,10 +125,10 @@ class QOTD_slash(commands.Cog):
 
         self.qotd_data["guilds"][guild_id]["channel_id"] = channel.id
         await save_qotd_data(self.qotd_data)
-        await interaction.response.send_message(f"Místnost pro QOTD byla nastavena na {channel.mention}", ephemeral=True)
+        await interaction.response.send_message(f"QOTD channel set to: {channel.mention}", ephemeral=True)
 
     # Slash příkaz: Nastavení pingu
-    @app_commands.command(name="setqotdping", description="Nastaví ping pro QOTD.")
+    @app_commands.command(name="setqotdping", description="Sets the ping for QOTD.")
     @app_commands.checks.has_permissions(manage_guild=True)
     async def set_qotd_ping(self, interaction: discord.Interaction, ping: str = None):
         guild_id = str(interaction.guild.id)
@@ -137,10 +137,10 @@ class QOTD_slash(commands.Cog):
 
         self.qotd_data["guilds"][guild_id]["ping"] = ping
         await save_qotd_data(self.qotd_data)
-        await interaction.response.send_message(f"Ping pro QOTD byl nastaven na: {ping}", ephemeral=True)
+        await interaction.response.send_message(f"Ping for QOTD was set to: {ping}", ephemeral=True)
 
     # Slash příkaz: Zobrazení otázek
-    @app_commands.command(name="listquestions", description="Zobrazí seznam otázek.")
+    @app_commands.command(name="listquestions", description="Lists all questions for this server.")
     @app_commands.checks.has_permissions(manage_guild=True)
     async def list_questions(self, interaction: discord.Interaction):
         guild_id = str(interaction.guild.id)
@@ -148,11 +148,11 @@ class QOTD_slash(commands.Cog):
         questions = guild_data.get("questions", [])
 
         if not questions:
-            await interaction.response.send_message("Nejsou žádné otázky v databázi.", ephemeral=True)
+            await interaction.response.send_message("No questions in the database!", ephemeral=True)
             return
 
         questions_list = "\n".join([f"{i+1}. {q}" for i, q in enumerate(questions)])
-        await interaction.response.send_message(f"Aktuální otázky:\n{questions_list}", ephemeral=True)
+        await interaction.response.send_message(f"Current questions:\n{questions_list}", ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(QOTD_slash(bot))

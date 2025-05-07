@@ -33,7 +33,7 @@ def get_version():
         return "Unknown Version"
 
 # Get the version at startup
-CURRENT_VERSION = "0.3.4"
+CURRENT_VERSION = "Beta 0.3.4"
 
 # Načítání prefixů ze souboru
 if os.path.exists(SETTINGS_FILE):
@@ -75,75 +75,75 @@ CLIENT_SECRET = "wf4j6ts074b94qvp2z44e7d4aha3e6"
 YOUR_USER_ID = 443842350377336860
 CO_OWNER_USER_ID = 1335248197467242519
 
-#twitch announcement
-access_token = None
-is_stream_live = False
+# #twitch announcement
+# access_token = None
+# is_stream_live = False
 
-async def get_access_token():
-    global access_token
-    url = "https://id.twitch.tv/oauth2/token"
-    params = {
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
-        "grant_type": "client_credentials"
-    }
-    response = requests.post(url, data=params)
-    if response.status_code == 200:
-        data = response.json()
-        access_token = data["access_token"]
-        print(f"New access token obtained at {datetime.now()}")
-    else:
-        print(f"Failed to get access token: {response.status_code} {response.text}")
+# async def get_access_token():
+#     global access_token
+#     url = "https://id.twitch.tv/oauth2/token"
+#     params = {
+#         "client_id": CLIENT_ID,
+#         "client_secret": CLIENT_SECRET,
+#         "grant_type": "client_credentials"
+#     }
+#     response = requests.post(url, data=params)
+#     if response.status_code == 200:
+#         data = response.json()
+#         access_token = data["access_token"]
+#         print(f"New access token obtained at {datetime.now()}")
+#     else:
+#         print(f"Failed to get access token: {response.status_code} {response.text}")
 
-async def check_twitch(bot):
-    global is_stream_live
-    url = f"https://api.twitch.tv/helix/streams?user_login={TWITCH_CHANNEL}"
-    headers = {
-        "Client-ID": CLIENT_ID,
-        "Authorization": f"Bearer {access_token}"
-    }
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url, headers=headers) as response:
-            if response.status == 200:
-                data = await response.json()
-                if data.get("data"):
-                    if not is_stream_live:
-                        is_stream_live = True
-                        guild = bot.get_guild(GUILD_ID)
-                        if not guild:
-                            print(f"Guild with ID {GUILD_ID} not found.")
-                            return
+# async def check_twitch(bot):
+#     global is_stream_live
+#     url = f"https://api.twitch.tv/helix/streams?user_login={TWITCH_CHANNEL}"
+#     headers = {
+#         "Client-ID": CLIENT_ID,
+#         "Authorization": f"Bearer {access_token}"
+#     }
+#     async with aiohttp.ClientSession() as session:
+#         async with session.get(url, headers=headers) as response:
+#             if response.status == 200:
+#                 data = await response.json()
+#                 if data.get("data"):
+#                     if not is_stream_live:
+#                         is_stream_live = True
+#                         guild = bot.get_guild(GUILD_ID)
+#                         if not guild:
+#                             print(f"Guild with ID {GUILD_ID} not found.")
+#                             return
 
-                        channel = guild.get_channel(ANNOUNCEMENT_CHANNEL_ID)
-                        if not channel:
-                            print(f"Channel with ID {ANNOUNCEMENT_CHANNEL_ID} not found.")
-                            return
+#                         channel = guild.get_channel(ANNOUNCEMENT_CHANNEL_ID)
+#                         if not channel:
+#                             print(f"Channel with ID {ANNOUNCEMENT_CHANNEL_ID} not found.")
+#                             return
 
-                        stream_info = data["data"][0]
-                        title = stream_info.get("title", "")[0:100]
-                        game_name = stream_info.get("game_name", "Unknown")
+#                         stream_info = data["data"][0]
+#                         title = stream_info.get("title", "")[0:100]
+#                         game_name = stream_info.get("game_name", "Unknown")
 
-                        await channel.send(
-                            f"🎥 **{TWITCH_CHANNEL}** právě začal streamovat!\n"
-                            f"🎮 Hraje: {game_name}\n"
-                            f"📢 Titulek streamu: {title}\n"
-                            f"🔗 Sledujte na: https://www.twitch.tv/{TWITCH_CHANNEL}"
-                        )
-                else:
-                    if is_stream_live:
-                        is_stream_live = False
-                        print(f"{TWITCH_CHANNEL} stream has ended at {datetime.now()}.")
-            else:
-                print(f"Failed to fetch Twitch stream data: {response.status}")
+#                         await channel.send(
+#                             f"🎥 **{TWITCH_CHANNEL}** právě začal streamovat!\n"
+#                             f"🎮 Hraje: {game_name}\n"
+#                             f"📢 Titulek streamu: {title}\n"
+#                             f"🔗 Sledujte na: https://www.twitch.tv/{TWITCH_CHANNEL}"
+#                         )
+#                 else:
+#                     if is_stream_live:
+#                         is_stream_live = False
+#                         print(f"{TWITCH_CHANNEL} stream has ended at {datetime.now()}.")
+#             else:
+#                 print(f"Failed to fetch Twitch stream data: {response.status}")
 
-async def start_twitch_monitor(bot):
-    await get_access_token()
-    while True:
-        try:
-            await check_twitch(bot)
-        except Exception as e:
-            print(f"Error while checking Twitch: {e}")
-        await asyncio.sleep(300)  # Check every 5 minutes
+# async def start_twitch_monitor(bot):
+#     await get_access_token()
+#     while True:
+#         try:
+#             await check_twitch(bot)
+#         except Exception as e:
+#             print(f"Error while checking Twitch: {e}")
+#         await asyncio.sleep(300)  # Check every 5 minutes
 
 # Event: Bot je připraven
 @bot.event
@@ -152,15 +152,15 @@ async def on_ready():
     print(f'Bot ID: {bot.user.id}')
     await load_extensions()
     await sync_commands(bot)
-    await bot.change_presence(activity=discord.Streaming(name=f'{CURRENT_VERSION}', url='https://www.twitch.tv/Bluecat201'))
-    start_twitch_monitor(bot)
-    print(f'Bot sleduje Twitch')
+    await bot.change_presence(activity=discord.Streaming(name=f'{CURRENT_VERSION}', url='https://www.twitch.tv/bluecatlive'))
+    # start_twitch_monitor(bot)
+    # print(f'Bot sleduje Twitch')
 
     channel_id = 1325107856801923113  # Replace with your channel's ID
     channel = bot.get_channel(channel_id)
     
     if channel:
-        await channel.send("Bot is ready! ✅")  # Customize the message
+        await channel.send("Bot is ready! ✅\n Version: " + CURRENT_VERSION + "(" + get_version() + ")")  # Customize the message
     else:
         print(f'Channel with ID {channel_id} not found.')
 
@@ -258,34 +258,26 @@ async def support(ctx):
 async def twitch(ctx):
     await ctx.send("Here is developer twitch channel: https://www.twitch.tv/bluecat201")
 
-#response
+#
+#   AI Chatbot
+#
 chat_session = ChatSession()
-
 @bot.event
 async def on_message(message):
     IGNORED_CHANNELS = [648557196837388289]
-    # Don't let the bot respond to itself or other bots
     if message.author.bot:
         return
-    
-    # Ignorujte zprávy z konkrétních kanálů
     if message.channel.id in IGNORED_CHANNELS:
         return
 
-    # Check if the bot is mentioned
     if bot.user.mentioned_in(message):
-        query = message.content.replace(f"<@!{bot.user.id}>", "").strip()  # Odstraní zmínku bota z obsahu zprávy
-        
-        # Start typing indicator while generating response
+        query = message.content.replace(f"<@!{bot.user.id}>", "").strip()
         async with message.channel.typing():
             response = await chat_session.send_message(query)
             
         await message.reply(response)
-
-    # Handle normal bot commands as well
     await bot.process_commands(message)
 
-# Reset command (restricted to your user)
 @bot.command()
 async def reset(ctx):
     if ctx.author.id != YOUR_USER_ID and ctx.author.id != CO_OWNER_USER_ID:
@@ -370,41 +362,41 @@ async def change_prefix(ctx, prefix: str):
 @bot.event
 async def on_member_join(member):
     server = str(member.guild.name)
-    print(f'{member} se připojil na server {server}')
+    print(f'{member} joined {server}')
 
 #logace přidání bota na server
 @bot.event
 async def on_guild_join(guild):
-    print(f'Bot byl přidán na server: {guild}')
+    print(f'Bot was added to: {guild}')
 
 #logace odebrání bota ze serveru
 @bot.event
 async def on_guild_remove(guild):
-    print(f'Bot byl odebrán ze serveru: {guild}')
+    print(f'Bot was removed from: {guild}')
 
 #Logace odpojení uživatele
 @bot.event
 async def on_member_remove(member):
     server = str(member.guild.name)
-    print(f'{member} se odpojil  ze serveru {server}')
+    print(f'{member} left {server}')
 
 #logace vytvoření role
 @bot.event
 async def on_guild_role_create(role):
     server = str(role.guild.name)
-    print(f'Role {role} byla vytvořena [{server}]')
+    print(f'Role {role} was created on [{server}]')
 
 #logace smazání role
 @bot.event
 async def on_guild_role_delete(role):
     server = str(role.guild.name)
-    print(f'Role {role} byla smazána [{server}]')
+    print(f'Role {role} was deleted on [{server}]')
 
 #logace přidání role uživately
 @bot.event
 async def on_guild_role_update(before,after):
     server = str(before.guild.name)
-    print(f'Role {before} byla změněna na {after} na serveru {server}')
+    print(f'Role {before} was changed to {after} on {server}')
 
 #logace změny zprávy
 @bot.event
@@ -413,7 +405,7 @@ async def on_message_edit(before,after):
     username = str(before.author)
     prvni = str(before.content)
     potom = str(after.content)
-    print(f'Zpráva "{prvni}" byla změněna na "{potom}" od {username} ({server})')
+    print(f'Message "{prvni}" was changed to "{potom}" by {username} ({server})')
 
 #logace smazání zprávy
 @bot.event
@@ -422,7 +414,7 @@ async def on_message_delete(message):
     username = str(message.author)
     server = str(message.guild.name)
     channel = str(message.channel.name)
-    print(f'Zpráva "{zprava}" od {username} v roomce {channel} na serveru {server} byla smazána')
+    print(f'Message "{zprava}" by {username} in {channel} on {server} was deleted')
 
 
 
