@@ -160,7 +160,14 @@ async def on_ready():
     channel = bot.get_channel(channel_id)
     
     if channel:
-        await channel.send("Bot is ready! ✅\n Version: " + CURRENT_VERSION + "(" + get_version() + ")")  # Customize the message
+        embed = discord.Embed(
+            title="Bot is Ready! ✅", 
+            description=f"Version: {CURRENT_VERSION}",
+            color=discord.Color.green()
+        )
+        embed.add_field(name="Git Commit", value=get_version(), inline=False)
+        embed.set_footer(text=f"Started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        await channel.send(embed=embed)
     else:
         print(f'Channel with ID {channel_id} not found.')
 

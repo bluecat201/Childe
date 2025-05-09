@@ -111,7 +111,16 @@ class QOTD_slash(commands.Cog):
         question = questions.pop(0)
         ping = guild_data.get("ping")
 
-        await channel.send(f"{ping or ''} **Question of the Day:** {question}")
+        # Create embed
+        embed = discord.Embed(
+            title="Question of the Day",
+            description=question,
+            color=discord.Color.blue(),
+            timestamp=datetime.now()
+        )
+        
+        # Send message with ping outside embed if exists
+        await channel.send(content=ping or '', embed=embed)
         await save_qotd_data(self.qotd_data)
         await interaction.response.send_message("The QOTD has been sent!", ephemeral=True)
 
