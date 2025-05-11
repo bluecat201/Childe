@@ -227,14 +227,26 @@ class MentalHealthCheck(commands.Cog):
             return
 
         ping_roles_mentions = " ".join([f"<@&{role_id}>" for role_id in self.ping_roles])
+        
+        embed = discord.Embed(
+            title="Mental Health Check-in",
+            description="How are you feeling today?",
+            color=discord.Color.blue()
+        )
+        
+        embed.add_field(
+            name="Respond with", 
+            value="Use the command `/mentalhealth respond [mood]` to let us know.\n\n"
+                 "Available options: happy, sad, stressed, calm, tired, motivated, or others.",
+            inline=False
+        )
+        
+        embed.set_footer(text="Take care of yourself! Your mental health matters.")
+        
         for channel_id in self.channel_ids:
             channel = self.bot.get_channel(channel_id)
             if channel:
-                await channel.send(
-                    f"{ping_roles_mentions}\nThis is your mental health check-in! \n"
-                    "How are you feeling today? Use the command `/mentalhealth respond [mood]` to let us know. \n"
-                    "Available options: happy, sad, stressed, calm, tired, motivated, or others."
-                )
+                await channel.send(content=ping_roles_mentions, embed=embed)
         await ctx.send("Mental health check message has been sent manually.")
 
     @tasks.loop(hours=1)
@@ -245,14 +257,26 @@ class MentalHealthCheck(commands.Cog):
         now = datetime.utcnow()
         if (now.hour % self.frequency) == 0:
             ping_roles_mentions = " ".join([f"<@&{role_id}>" for role_id in self.ping_roles])
+            
+            embed = discord.Embed(
+                title="Mental Health Check-in",
+                description="How are you feeling today?",
+                color=discord.Color.blue()
+            )
+            
+            embed.add_field(
+                name="Respond with", 
+                value="Use the command `/mentalhealth respond [mood]` to let us know.\n\n"
+                     "Available options: `happy`, `sad`, `stressed`, `calm`, `tired`, `motivated`, or others.",
+                inline=False
+            )
+            
+            embed.set_footer(text="Take care of yourself! Your mental health matters.")
+            
             for channel_id in self.channel_ids:
                 channel = self.bot.get_channel(channel_id)
                 if channel:
-                    await channel.send(
-                        f"{ping_roles_mentions}\nThis is your mental health check-in! \n"
-                        "How are you feeling today? Use the command `/mentalhealth respond [mood]` to let us know. \n"
-                        "Available options: happy, sad, stressed, calm, tired, motivated, or others."
-                    )
+                    await channel.send(content=ping_roles_mentions, embed=embed)
 
     @mentalhealth.command(name="respond")
     async def respond(self, ctx, mood: str):
