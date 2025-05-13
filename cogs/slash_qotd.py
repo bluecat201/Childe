@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import asyncio
 import os
 import aiofiles
+import random  # Add this import for random selection
 
 QOTD_FILE = "qotd.json"
 
@@ -162,6 +163,43 @@ class QOTD_slash(commands.Cog):
 
         questions_list = "\n".join([f"{i+1}. {q}" for i, q in enumerate(questions)])
         await interaction.response.send_message(f"Current questions:\n{questions_list}", ephemeral=True)
+
+    @app_commands.command(name="testqotd", description="DEV qotd tester")
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def test_qotd(self, interaction: discord.Interaction):
+        guild_id = str(interaction.guild.id)
+        guild_data = self.qotd_data["guilds"].get(guild_id, {})
+        questions = guild_data.get("questions", [])
+
+        if not questions:
+            await interaction.response.send_message("No questions in the database to test with!", ephemeral=True)
+            return
+
+        # Get test channel
+        test_channel_id = 1325107856801923113
+        test_channel = self.bot.get_channel(test_channel_id)
+        
+        if not test_channel:
+            await interaction.response.send_message("Test channel not found. Please check the channel ID.", ephemeral=True)
+            return
+
+        # Select up to 5 random questions
+        sample_size = min(5, len(questions))
+        selected_questions = random.sample(questions, sample_size)
+        
+        # Create embed with the questions
+        embed = discord.Embed(
+            title="qotd tesetr",
+            description="som bol najebany trocha",
+            color=discord.Color.blue(),
+            timestamp=datetime.now()
+        )
+        
+        for i, question in enumerate(selected_questions, 1):
+            embed.add_field(name=f"Question {i}", value=question, inline=False)
+        
+        await test_channel.send(embed=embed)
+        await interaction.response.send_message(f"Sent {sample_size} random questions to the test channel!", ephemeral=False)
 
 async def setup(bot):
     await bot.add_cog(QOTD_slash(bot))
