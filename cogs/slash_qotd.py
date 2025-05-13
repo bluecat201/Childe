@@ -161,8 +161,29 @@ class QOTD_slash(commands.Cog):
             await interaction.response.send_message("No questions in the database!", ephemeral=True)
             return
 
-        questions_list = "\n".join([f"{i+1}. {q}" for i, q in enumerate(questions)])
-        await interaction.response.send_message(f"Current questions:\n{questions_list}", ephemeral=True)
+        # Paginate questions to stay within Discord's 2000 character limit
+        pages = []
+        current_page = "Questions in the database:\n"
+        
+        for i, q in enumerate(questions, 1):
+            question_entry = f"{i}. {q}\n"
+            
+            if len(current_page) + len(question_entry) > 1900:
+                pages.append(current_page)
+                current_page = question_entry
+            else:
+                current_page += question_entry
+        
+        if current_page:
+            pages.append(current_page)
+        
+        if len(pages) == 1:
+            await interaction.response.send_message(pages[0], ephemeral=True)
+        else:
+            await interaction.response.send_message(f"{pages[0]}\n\nPage 1/{len(pages)}", ephemeral=True)
+            
+            for i, page in enumerate(pages[1:], 2):
+                await interaction.followup.send(f"{page}\n\nPage {i}/{len(pages)}", ephemeral=True)
 
     @app_commands.command(name="testqotd", description="DEV qotd tester")
     @app_commands.checks.has_permissions(manage_guild=True)
