@@ -33,7 +33,7 @@ def get_version():
         return "Unknown Version"
 
 # Get the version at startup
-CURRENT_VERSION = "Beta 0.3.4"
+CURRENT_VERSION = "Beta 0.4"
 
 # Načítání prefixů ze souboru
 if os.path.exists(SETTINGS_FILE):

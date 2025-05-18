@@ -220,7 +220,7 @@ class QOTD_slash(commands.Cog):
             embed.add_field(name=f"Question {i}", value=question, inline=False)
         
         await test_channel.send(embed=embed)
-        await interaction.response.send_message(f"Sent {sample_size} random questions to the test channel!", ephemeral=False)
+        await interaction.response.send_message(f"Sent {sample_size} random questions to the test channel!", ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(QOTD_slash(bot))

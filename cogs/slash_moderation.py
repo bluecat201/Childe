@@ -126,8 +126,17 @@ class SlashModeration(commands.Cog):
     @app_commands.command(name="sudo", description="Childe speaks for you!")
     @app_commands.checks.has_permissions(administrator=True)
     async def sudo(self, interaction: discord.Interaction, message: str):
-        await interaction.response.send_message(message)
-        await interaction.delete_original_message()
+        # Send ephemeral embed to the user
+        embed = discord.Embed(
+            title="Sudo Executed",
+            description=f"**Channel:** {interaction.channel.mention}\n**Message:** {message}",
+            color=discord.Color.blue()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        wait_time = max(1, len(message) // 5)
+        async with interaction.channel.typing():
+            await asyncio.sleep(wait_time)
+            await interaction.channel.send(message)
 
     # Unban
     @app_commands.command(name="unban", description="Removes ban from user")
