@@ -1,8 +1,11 @@
 import subprocess
 import time
 import os
+import asyncio
+import discord
+from childe import sync_commands, bot
 
-def main():
+async def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     command = ["python3", "childe.py"]
     
@@ -30,6 +33,9 @@ def main():
             print(f"Bot exited with code: {process.returncode}. Restarting in 5 seconds...")
             time.sleep(5)  # Pause before restart
             
+            # Ensure commands are force-loaded after restart
+            await sync_commands(bot)
+            
         except KeyboardInterrupt:
             print("Auto-restart terminated by user.")
             break
@@ -38,4 +44,4 @@ def main():
             time.sleep(5)
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
