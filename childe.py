@@ -180,6 +180,7 @@ async def load_extensions():
                 print(f"Načten modul: {filename}")
             except Exception as e:
                 print(f"Chyba při načítání {filename}: {e}")
+    await sync_commands(bot)  # Ensure commands are force-loaded on startup
 
 async def sync_commands(bot):
     for guild in bot.guilds:  # Pokud chcete synchronizovat pro konkrétní servery
