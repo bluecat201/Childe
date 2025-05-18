@@ -37,17 +37,6 @@ class QOTD_slash(commands.Cog):
     def cog_unload(self):
         self.qotd_task.cancel()
 
-    @tasks.loop(hours=24)
-    async def qotd_task(self):
-        now = datetime.now()
-        target_time = datetime.combine(now.date(), datetime.min.time()) + timedelta(hours=12)
-        delay = (target_time - now).total_seconds()
-
-        if delay > 0:
-            await asyncio.sleep(delay)
-
-        await self.send_questions_to_all_guilds()
-
     async def send_questions_to_all_guilds(self):
         for guild_id, data in self.qotd_data["guilds"].items():
             channel_id = data.get("channel_id")
