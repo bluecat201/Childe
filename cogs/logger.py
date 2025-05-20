@@ -304,22 +304,34 @@ class Logger(commands.Cog):
             return
         if message.guild and message.channel.id == self.get_log_channel(message.guild.id):
             return
+        
         files = [await attachment.to_file() for attachment in message.attachments]
         embeds = message.embeds if message.embeds else None
-        async for entry in message.guild.audit_logs(limit=1, action=discord.AuditLogAction.message_delete):
-            deleter = entry.user if entry.target == message.author else None
-            deleter_info = f"**Deleted by:** {deleter.mention}" if deleter else "Deleted by unknown user."
-            await self.send_log(
-                message.guild.id,
-                "🗑️ Message deleted",
-                f"**Channel:** {message.channel.mention}\n"
-                f"**Author:** {message.author.mention}\n"
-                f"**Content:** {message.content}\n"
-                f"{deleter_info}",
-                discord.Color.red(),
-                files=files,
-                embeds=embeds
-            )
+        
+        deleter = None
+        try:
+            async for entry in message.guild.audit_logs(limit=5, action=discord.AuditLogAction.message_delete):
+                if entry.target.id == message.author.id and entry.extra.channel.id == message.channel.id:
+                    deleter = entry.user
+                    break
+        except Exception:
+            pass
+        if deleter:
+            deleter_info = f"**Deleted by:** {deleter.mention}"
+        else:
+            deleter_info = f"**Deleted by:** {message.author.mention}"
+            
+        await self.send_log(
+            message.guild.id,
+            "🗑️ Message deleted",
+            f"**Channel:** {message.channel.mention}\n"
+            f"**Author:** {message.author.mention}\n"
+            f"**Content:** {message.content}\n"
+            f"{deleter_info}",
+            discord.Color.red(),
+            files=files,
+            embeds=embeds
+        )
 
     @commands.Cog.listener()
     async def on_bulk_message_delete(self, messages):
