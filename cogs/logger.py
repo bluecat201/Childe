@@ -300,6 +300,8 @@ class Logger(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message_delete(self, message):
+        if message.author.bot:
+            return
         if message.guild and message.channel.id == self.get_log_channel(message.guild.id):
             return
         files = [await attachment.to_file() for attachment in message.attachments]
