@@ -3,6 +3,8 @@ from discord.ext import commands, tasks
 import json
 import os
 from datetime import datetime, timedelta
+from discord import ButtonStyle
+from discord.ui import View, Button
 
 # Data files - keep these separate as they contain actual user data, not config
 SERVER_MOOD_FILE = "server_mood_data.json"
@@ -63,6 +65,116 @@ def get_mental_health_settings():
         }
         
     return settings_data["global"]["mental_health"]
+
+class MoodResponseView(discord.ui.View):
+    def __init__(self, cog):
+        super().__init__(timeout=None)
+        self.cog = cog
+        
+    @discord.ui.button(label="Happy!", style=ButtonStyle.green, custom_id="mood_happy")
+    async def happy_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        await self.handle_mood(interaction, "happy")
+    
+    @discord.ui.button(label="Sad", style=ButtonStyle.gray, custom_id="mood_sad")
+    async def sad_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        await self.handle_mood(interaction, "sad")
+    
+    @discord.ui.button(label="Stressed", style=ButtonStyle.red, custom_id="mood_stressed")
+    async def stressed_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        await self.handle_mood(interaction, "stressed")
+    
+    @discord.ui.button(label="Calm", style=ButtonStyle.blurple, custom_id="mood_calm")
+    async def calm_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        await self.handle_mood(interaction, "calm")
+    
+    @discord.ui.button(label="Tired", style=ButtonStyle.gray, custom_id="mood_tired")
+    async def tired_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        await self.handle_mood(interaction, "tired")
+    
+    @discord.ui.button(label="Motivated", style=ButtonStyle.green, custom_id="mood_motivated")
+    async def motivated_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        await self.handle_mood(interaction, "motivated")
+    
+    @discord.ui.button(label="Other...", style=ButtonStyle.blurple, custom_id="mood_others")
+    async def others_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        await self.handle_mood(interaction, "others")
+    
+    async def handle_mood(self, interaction, mood):
+        valid_moods = ["happy", "sad", "stressed", "calm", "tired", "motivated"]
+        guild_id = str(interaction.guild_id)
+        user_id = str(interaction.user.id)
+
+        current_date = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
+        if user_id not in user_mood_data:
+            user_mood_data[user_id] = {m: 0 for m in valid_moods}
+        if mood != "others":
+            user_mood_data[user_id][mood] += 1
+
+        if guild_id not in server_mood_data:
+            server_mood_data[guild_id] = {m: 0 for m in valid_moods}
+        if mood != "others":
+            server_mood_data[guild_id][mood] += 1
+        else:
+            await interaction.followup.send("Please reply with a brief description of your mood.", ephemeral=True)
+            
+            try:
+                def check(m):
+                    return m.author.id == interaction.user.id and isinstance(m.channel, discord.DMChannel)
+                
+                try:
+                    dm_channel = await interaction.user.create_dm()
+                    await dm_channel.send("Please describe your mood:")
+                    description = await self.cog.bot.wait_for("message", timeout=60.0, check=check)
+                    mood_description = description.content
+                except:
+                    await interaction.followup.send("I couldn't send you a DM. Please use `/mentalhealth respond others` in a channel.", ephemeral=True)
+                    return
+                
+                if "others" not in server_mood_data[guild_id]:
+                    server_mood_data[guild_id]["others"] = {}
+                if "others" not in user_mood_data[user_id]:
+                    user_mood_data[user_id]["others"] = {}
+                
+                if mood_description not in server_mood_data[guild_id]["others"]:
+                    server_mood_data[guild_id]["others"][mood_description] = 1
+                else:
+                    server_mood_data[guild_id]["others"][mood_description] += 1
+
+                if mood_description not in user_mood_data[user_id]["others"]:
+                    user_mood_data[user_id]["others"][mood_description] = 1
+                else:
+                    user_mood_data[user_id]["others"][mood_description] += 1
+                
+                await dm_channel.send("Thank you for your response. Your mood has been recorded.")
+                
+            except Exception as e:
+                await interaction.followup.send("No response received or an error occurred. Your mood was not recorded.", ephemeral=True)
+                return
+
+        if guild_id not in mood_dates_data:
+            mood_dates_data[guild_id] = {}
+        if user_id not in mood_dates_data[guild_id]:
+            mood_dates_data[guild_id][user_id] = []
+        
+        mood_record = {
+            "mood": mood,
+            "date": current_date
+        }
+        mood_dates_data[guild_id][user_id].append(mood_record)
+
+        self.cog.save_mood_data()
+
+        if mood != "others":
+            await interaction.followup.send(f"Thank you for responding! Your mood ({mood}) has been recorded.", ephemeral=True)
+
 
 class MentalHealthCheck(commands.Cog):
     def __init__(self, bot):
@@ -236,17 +348,18 @@ class MentalHealthCheck(commands.Cog):
         
         embed.add_field(
             name="Respond with", 
-            value="Use the command `/mentalhealth respond [mood]` to let us know.\n\n"
-                 "Available options: happy, sad, stressed, calm, tired, motivated, or others.",
+            value="Click a button below or use the command `/mentalhealth respond [mood]` to let us know.",
             inline=False
         )
         
         embed.set_footer(text="Take care of yourself! Your mental health matters.")
         
+        view = MoodResponseView(self)
+        
         for channel_id in self.channel_ids:
             channel = self.bot.get_channel(channel_id)
             if channel:
-                await channel.send(content=ping_roles_mentions, embed=embed)
+                await channel.send(content=ping_roles_mentions, embed=embed, view=view)
         await ctx.send("Mental health check message has been sent manually.")
 
     @tasks.loop(hours=1)
@@ -266,17 +379,18 @@ class MentalHealthCheck(commands.Cog):
             
             embed.add_field(
                 name="Respond with", 
-                value="Use the command `/mentalhealth respond [mood]` to let us know.\n\n"
-                     "Available options: `happy`, `sad`, `stressed`, `calm`, `tired`, `motivated`, or others.",
+                value="Click a button below or use the command `/mentalhealth respond [mood]` to let us know.",
                 inline=False
             )
             
             embed.set_footer(text="Take care of yourself! Your mental health matters.")
             
+            view = MoodResponseView(self)
+            
             for channel_id in self.channel_ids:
                 channel = self.bot.get_channel(channel_id)
                 if channel:
-                    await channel.send(content=ping_roles_mentions, embed=embed)
+                    await channel.send(content=ping_roles_mentions, embed=embed, view=view)
 
     @mentalhealth.command(name="respond")
     async def respond(self, ctx, mood: str):
