@@ -208,6 +208,8 @@ class Logger(commands.Cog):
 
     @commands.Cog.listener()
     async def on_guild_role_delete(self, role):
+        if role.managed:
+            return
         await self.send_log(
             role.guild.id,
             "❌ Role deleted",
@@ -230,11 +232,12 @@ class Logger(commands.Cog):
         
         if removed_roles:
             roles_removed = ", ".join([role.mention for role in removed_roles])
-            await self.send_log(
-                after.guild.id,
-                "➖ Role removed",
-                f"{after.mention} lost the role(s): {roles_removed}"
-            )
+            if not any(role.managed for role in removed_roles):
+                await self.send_log(
+                    after.guild.id,
+                    "➖ Role removed",
+                    f"{after.mention} lost the role(s): {roles_removed}"
+                )
 
         if before.timed_out_until != after.timed_out_until:
             if after.timed_out_until:
