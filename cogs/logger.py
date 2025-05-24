@@ -231,8 +231,11 @@ class Logger(commands.Cog):
             )
         
         if removed_roles:
+            # Check if the role removal was caused by a role deletion
+            # Roles that don't exist in the guild anymore were deleted, so we don't log these removals
             existing_roles = [role for role in removed_roles if role in after.guild.roles]
             
+            # Only log role removals for roles that still exist (meaning the role was removed from the user, not deleted)
             if existing_roles:
                 roles_removed = ", ".join([role.mention for role in existing_roles])
                 if not any(role.managed for role in existing_roles):
