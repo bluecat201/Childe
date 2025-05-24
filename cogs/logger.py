@@ -231,13 +231,16 @@ class Logger(commands.Cog):
             )
         
         if removed_roles:
-            roles_removed = ", ".join([role.mention for role in removed_roles])
-            if not any(role.managed for role in removed_roles):
-                await self.send_log(
-                    after.guild.id,
-                    "➖ Role removed",
-                    f"{after.mention} lost the role(s): {roles_removed}"
-                )
+            existing_roles = [role for role in removed_roles if role in after.guild.roles]
+            
+            if existing_roles:
+                roles_removed = ", ".join([role.mention for role in existing_roles])
+                if not any(role.managed for role in existing_roles):
+                    await self.send_log(
+                        after.guild.id,
+                        "➖ Role removed",
+                        f"{after.mention} lost the role(s): {roles_removed}"
+                    )
 
         if before.timed_out_until != after.timed_out_until:
             if after.timed_out_until:
