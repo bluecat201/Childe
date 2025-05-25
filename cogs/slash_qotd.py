@@ -138,7 +138,6 @@ class QOTD_slash(commands.Cog):
         await save_qotd_data(self.qotd_data)
         await interaction.response.send_message(f"Ping for QOTD was set to: {ping}", ephemeral=True)
 
-    # Slash příkaz: Zobrazení otázek
     @app_commands.command(name="listquestions", description="Lists all questions for this server.")
     @app_commands.checks.has_permissions(manage_guild=True)
     async def list_questions(self, interaction: discord.Interaction):
@@ -149,30 +148,53 @@ class QOTD_slash(commands.Cog):
         if not questions:
             await interaction.response.send_message("No questions in the database!", ephemeral=True)
             return
-
-        # Paginate questions to stay within Discord's 2000 character limit
-        pages = []
-        current_page = "Questions in the database:\n"
+        embeds = []
+        current_embed = discord.Embed(
+            title="Questions in the Database",
+            color=discord.Color.blue(),
+            timestamp=datetime.now()
+        )
+        field_count = 0
+        questions_in_current_embed = []
         
-        for i, q in enumerate(questions, 1):
-            question_entry = f"{i}. {q}\n"
+        for i, question in enumerate(questions, 1):
+            if field_count >= 25:
+                for j, q_batch in enumerate(questions_in_current_embed, 1):
+                    current_embed.add_field(
+                        name=f"Questions {j}",
+                        value=q_batch,
+                        inline=False
+                    )
+                embeds.append(current_embed)
+                current_embed = discord.Embed(
+                    title="Questions in the Database (Continued)",
+                    color=discord.Color.blue(),
+                    timestamp=datetime.now()
+                )
+                field_count = 0
+                questions_in_current_embed = []
             
-            if len(current_page) + len(question_entry) > 1900:
-                pages.append(current_page)
-                current_page = question_entry
+            question_text = f"{i}. {question}\n"
+            
+            if not questions_in_current_embed:
+                questions_in_current_embed.append(question_text)
+            elif len(questions_in_current_embed[-1]) + len(question_text) < 1000:
+                questions_in_current_embed[-1] += question_text
             else:
-                current_page += question_entry
-        
-        if current_page:
-            pages.append(current_page)
-        
-        if len(pages) == 1:
-            await interaction.response.send_message(pages[0], ephemeral=True)
-        else:
-            await interaction.response.send_message(f"{pages[0]}\n\nPage 1/{len(pages)}", ephemeral=True)
-            
-            for i, page in enumerate(pages[1:], 2):
-                await interaction.followup.send(f"{page}\n\nPage {i}/{len(pages)}", ephemeral=True)
+                questions_in_current_embed.append(question_text)
+                field_count += 1
+        for j, q_batch in enumerate(questions_in_current_embed, 1):
+            current_embed.add_field(
+                name=f"Questions {j}",
+                value=q_batch,
+                inline=False
+            )
+        embeds.append(current_embed)
+        for i, embed in enumerate(embeds):
+            embed.set_footer(text=f"Page {i+1}/{len(embeds)}")
+        await interaction.response.send_message(embed=embeds[0], ephemeral=True)
+        for embed in embeds[1:]:
+            await interaction.followup.send(embed=embed, ephemeral=True)
 
     @app_commands.command(name="testqotd", description="DEV qotd tester")
     @app_commands.checks.has_permissions(manage_guild=True)

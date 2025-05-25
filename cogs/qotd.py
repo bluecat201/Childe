@@ -120,9 +120,7 @@ class QOTD(commands.Cog):
 
         self.qotd_data["guilds"][guild_id]["ping"] = ping
         await save_qotd_data(self.qotd_data)
-        await ctx.send(f"Ping for QOTD was set to: {ping}")
-
-    @commands.command(name="listquestions")
+        await ctx.send(f"Ping for QOTD was set to: {ping}")    @commands.command(name="listquestions")
     @commands.has_permissions(manage_guild=True)
     async def list_questions(self, ctx):
         guild_id = str(ctx.guild.id)
@@ -133,8 +131,56 @@ class QOTD(commands.Cog):
             await ctx.send("No question in database.")
             return
 
-        questions_list = "\n".join([f"{i+1}. {q}" for i, q in enumerate(questions)])
-        await ctx.send(f"Current questions:\n{questions_list}")
+        embeds = []
+        current_embed = discord.Embed(
+            title="Questions in the database",
+            color=discord.Color.blue(),
+            timestamp=datetime.now()
+        )
+        field_count = 0
+        questions_in_current_embed = []
+        
+        for i, question in enumerate(questions, 1):
+            if field_count >= 25:
+                for j, q_batch in enumerate(questions_in_current_embed, 1):
+                    current_embed.add_field(
+                        name=f"Questions {j}",
+                        value=q_batch,
+                        inline=False
+                    )
+                embeds.append(current_embed)
+                current_embed = discord.Embed(
+                    title="Questions in the database (Continued)",
+                    color=discord.Color.blue(),
+                    timestamp=datetime.now()
+                )
+                field_count = 0
+                questions_in_current_embed = []
+            
+            question_text = f"{i}. {question}\n"
+            
+            if not questions_in_current_embed:
+                questions_in_current_embed.append(question_text)
+            elif len(questions_in_current_embed[-1]) + len(question_text) < 1000:
+                questions_in_current_embed[-1] += question_text
+            else:
+                questions_in_current_embed.append(question_text)
+                field_count += 1
+        
+        for j, q_batch in enumerate(questions_in_current_embed, 1):
+            current_embed.add_field(
+                name=f"Questions {j}",
+                value=q_batch,
+                inline=False
+            )
+        
+        embeds.append(current_embed)
+        
+        for i, embed in enumerate(embeds):
+            embed.set_footer(text=f"Page {i+1}/{len(embeds)}")
+        
+        for embed in embeds:
+            await ctx.send(embed=embed)
 
 async def setup(bot):
     await bot.add_cog(QOTD(bot))
