@@ -29,13 +29,13 @@ async def save_qotd_data(data):
 class QOTD_slash(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.qotd_task.start()
+        # self.qotd_task.start()
 
     async def cog_load(self):
         self.qotd_data = await load_qotd_data()  # Načtení existujících dat při spuštění
 
-    def cog_unload(self):
-        self.qotd_task.cancel()
+    # def cog_unload(self):
+    #     self.qotd_task.cancel()
 
     async def send_questions_to_all_guilds(self):
         for guild_id, data in self.qotd_data["guilds"].items():
@@ -59,11 +59,11 @@ class QOTD_slash(commands.Cog):
 
         await save_qotd_data(self.qotd_data)
 
-    @qotd_task.before_loop
-    async def before_qotd_task(self):
-        await self.bot.wait_until_ready()
-        if not self.qotd_data:
-            self.qotd_data = await load_qotd_data()
+    # @qotd_task.before_loop
+    # async def before_qotd_task(self):
+    #     await self.bot.wait_until_ready()
+    #     if not self.qotd_data:
+    #         self.qotd_data = await load_qotd_data()
 
     # Slash příkaz: Přidání otázky
     @app_commands.command(name="addquestion", description="Adds question to the list.")
