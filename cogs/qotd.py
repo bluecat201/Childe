@@ -120,7 +120,9 @@ class QOTD(commands.Cog):
 
         self.qotd_data["guilds"][guild_id]["ping"] = ping
         await save_qotd_data(self.qotd_data)
-        await ctx.send(f"Ping for QOTD was set to: {ping}")    @commands.command(name="listquestions")
+        await ctx.send(f"Ping for QOTD was set to: {ping}") 
+           
+    @commands.command(name="listquestions")
     @commands.has_permissions(manage_guild=True)
     async def list_questions(self, ctx):
         guild_id = str(ctx.guild.id)
