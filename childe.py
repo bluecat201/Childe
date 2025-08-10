@@ -99,6 +99,23 @@ class CustomBot(commands.Bot):
 
 bot = CustomBot()
 
+async def sync_commands(bot_instance):
+    """Sync commands globally and to all guilds"""
+    try:
+        # Sync commands globally
+        synced_commands = await bot_instance.tree.sync()
+        print(f"Synced {len(synced_commands)} commands globally!")
+        
+        # Additionally sync commands to each guild for immediate updates
+        for guild in bot_instance.guilds:
+            try:
+                synced_commands = await bot_instance.tree.sync(guild=discord.Object(id=guild.id))
+                print(f"Synced {len(synced_commands)} commands to guild: {guild.name}")
+            except Exception as e:
+                print(f"Error syncing commands to {guild.name}: {e}")
+    except Exception as e:
+        print(f"Error syncing global commands: {e}")
+
 # --- SLASH COMMANDS ---
 @bot.tree.command(name="rps", description="Play rock, paper, scissors")
 @app_commands.choices(option=[
