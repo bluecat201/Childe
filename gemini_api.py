@@ -6,7 +6,7 @@ class ChatSession:
 
     async def send_message(self, query: str):
         """Send a request to the Gemini API and get a response."""
-        api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+        api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
         api_key = "AIzaSyAxta66qVeiGVSIRcUPAYlk_7mhDB-YJ3o"  # Replace with your actual Gemini API key
 
         headers = {
