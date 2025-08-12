@@ -2,7 +2,7 @@ import aiohttp
 
 class ChatSession:
     def __init__(self):
-        self.history = []  # Uchová historii otázek a odpovědí
+        self.history = []  # Uchová historii otázek a odpovědí 
 
     async def send_message(self, query: str):
         """Send a request to the Gemini API and get a response."""
