@@ -1,13 +1,17 @@
 import aiohttp
+import json
 
 class ChatSession:
     def __init__(self):
-        self.history = []  # Uchová historii otázek a odpovědí 
+        self.history = []  # Uchová historii otázek a odpovědí
 
     async def send_message(self, query: str):
         """Send a request to the Gemini API and get a response."""
-        api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
-        api_key = "AIzaSyAxta66qVeiGVSIRcUPAYlk_7mhDB-YJ3o"
+        api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+
+        with open("config.json", "r") as file:
+            config = json.load(file)
+            api_key = config["gemini-api"]
 
         headers = {
             "Content-Type": "application/json",
