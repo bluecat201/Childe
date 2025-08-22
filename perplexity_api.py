@@ -21,7 +21,7 @@ class ChatSession:
             self.history.append({"role": "system", "content": system_prompt})
         self.history.append({"role": "user", "content": query})
         payload = {
-            "model": "sonar-pro",
+            "model": "sonar",
             "messages": self.history,
         }
         async with aiohttp.ClientSession() as session:
