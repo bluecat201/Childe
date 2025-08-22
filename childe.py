@@ -12,8 +12,8 @@ import aiofiles
 import requests
 import subprocess
 from datetime import datetime
-from gemini_api import ChatSession
-
+# from gemini_api import ChatSession
+from perplexity_api import ChatSession
 DEFAULT_PREFIX = "!"
 PREFIX_FILE = "prefixes.json"
 WARNINGS_FILE = "warnings.json"
@@ -29,7 +29,7 @@ def get_version():
     except Exception:
         return "Unknown Version"
 
-CURRENT_VERSION = "Beta 0.4"
+CURRENT_VERSION = "Beta 0.4.2a"
 
 if os.path.exists(SETTINGS_FILE):
     with open(SETTINGS_FILE, "r") as f:
