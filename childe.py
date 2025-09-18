@@ -29,7 +29,7 @@ def get_version():
     except Exception:
         return "Unknown Version"
 
-CURRENT_VERSION = "Beta 0.4.2a"
+CURRENT_VERSION = "Beta 0.4.3"
 
 if os.path.exists(SETTINGS_FILE):
     with open(SETTINGS_FILE, "r") as f:
@@ -180,6 +180,48 @@ async def twitch(ctx):
 
 # --- AI Chatbot ---
 chat_session = ChatSession()
+
+async def log_ai_interaction(user, guild, channel, prompt, response, session_id):
+    """Log AI chatbot interactions to a file"""
+    log_data = {
+        "timestamp": datetime.now().isoformat(),
+        "user_id": user.id,
+        "username": str(user),
+        "user_display_name": user.display_name,
+        "guild_id": guild.id if guild else None,
+        "guild_name": str(guild) if guild else "DM",
+        "channel_id": channel.id,
+        "channel_name": str(channel),
+        "prompt": prompt,
+        "response": response,
+        "session_id": session_id
+    }
+    
+    # Ensure logs directory exists
+    if not os.path.exists("logs"):
+        os.makedirs("logs")
+    
+    # Write to daily log file
+    log_filename = f"logs/ai_interactions_{datetime.now().strftime('%Y-%m-%d')}.json"
+    
+    try:
+        # Read existing logs if file exists
+        if os.path.exists(log_filename):
+            with open(log_filename, "r", encoding="utf-8") as f:
+                logs = json.load(f)
+        else:
+            logs = []
+        
+        # Append new log entry
+        logs.append(log_data)
+        
+        # Write back to file
+        with open(log_filename, "w", encoding="utf-8") as f:
+            json.dump(logs, f, indent=2, ensure_ascii=False)
+            
+    except Exception as e:
+        print(f"Error logging AI interaction: {e}")
+
 @bot.event
 async def on_message(message):
     IGNORED_CHANNELS = [648557196837388289]
@@ -192,7 +234,21 @@ async def on_message(message):
         query = message.content.replace(f"<@!{bot.user.id}>", "").strip()
         async with message.channel.typing():
             response = await chat_session.send_message(query)
-        await message.reply(response)
+        # Generate random 8 characters
+        random_chars = ''.join(random.choices('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', k=8))
+        response_with_footer = f"{response}\n-# Generated on sidet.eu API v1.1 PREVIEW | #{random_chars}"
+        
+        # Log the interaction
+        await log_ai_interaction(
+            user=message.author,
+            guild=message.guild,
+            channel=message.channel,
+            prompt=query,
+            response=response,
+            session_id=random_chars
+        )
+        
+        await message.reply(response_with_footer)
     await bot.process_commands(message)
 
 @bot.command()

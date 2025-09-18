@@ -4,5 +4,5 @@
     ],
     "ping_roles": [],
     "frequency": 24,
-    "check_enabled": true
+    "check_enabled": false
 }
