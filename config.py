@@ -13,66 +13,26 @@ class Config:
         self.config_data = self.load_config()
     
     def load_config(self) -> Dict[str, Any]:
-        """Load configuration from file or create default"""
+        """Load configuration from file"""
         if os.path.exists(self.config_file):
             try:
                 with open(self.config_file, 'r', encoding='utf-8') as f:
                     content = f.read().strip()
                     if not content:
-                        print(f"{self.config_file} is empty, creating default config")
-                        return self.create_default_config()
+                        print(f"ERROR: {self.config_file} is empty! Please add your configuration.")
+                        return {}
                     return json.loads(content)
             except json.JSONDecodeError as e:
-                print(f"JSON syntax error in {self.config_file} at line {e.lineno}, column {e.colno}: {e.msg}")
-                print(f"Creating backup of corrupted config and generating new default config")
-                # Backup the corrupted file
-                import shutil
-                try:
-                    shutil.copy(self.config_file, f"{self.config_file}.corrupted.backup")
-                    print(f"Corrupted config backed up to {self.config_file}.corrupted.backup")
-                except Exception as backup_e:
-                    print(f"Failed to backup corrupted config: {backup_e}")
-                return self.create_default_config()
-            except FileNotFoundError:
-                print(f"Error reading {self.config_file}, creating default config")
-                return self.create_default_config()
+                print(f"ERROR: JSON syntax error in {self.config_file} at line {e.lineno}, column {e.colno}: {e.msg}")
+                print(f"Please fix the JSON syntax in your config file.")
+                return {}
             except Exception as e:
-                print(f"Unexpected error reading {self.config_file}: {e}")
-                return self.create_default_config()
+                print(f"ERROR: Unexpected error reading {self.config_file}: {e}")
+                return {}
         else:
-            print(f"{self.config_file} not found, creating default config")
-            return self.create_default_config()
-    
-    def create_default_config(self) -> Dict[str, Any]:
-        """Create default configuration file with placeholder values"""
-        default_config = {
-            "database": {
-                "host": "localhost",
-                "port": 3306,
-                "user": "YOUR_DB_USER",
-                "password": "YOUR_DB_PASSWORD",
-                "database": "YOUR_DB_NAME"
-            },
-            "bot": {
-                "token": "YOUR_BOT_TOKEN_HERE",
-                "default_prefix": "*",
-                "guild_id": 0,
-                "announcement_channel_id": 0,
-                "startup_channel_id": 0,
-                "owner_user_id": 0,
-                "co_owner_user_id": 0
-            },
-            "api": {
-                "twitch": {
-                    "channel": "YOUR_TWITCH_CHANNEL",
-                    "client_id": "YOUR_TWITCH_CLIENT_ID",
-                    "client_secret": "YOUR_TWITCH_CLIENT_SECRET"
-                }
-            }
-        }
-        
-        self.save_config(default_config)
-        return default_config
+            print(f"ERROR: {self.config_file} not found! Please create your config file from the template.")
+            print(f"Run: cp config.json.template config.json")
+            return {}
     
     def save_config(self, config_data: Dict[str, Any] = None):
         """Save configuration to file"""
@@ -152,27 +112,28 @@ class Config:
         try:
             self.config_data = self.load_config()
             if not self.validate_config():
-                print("Config validation failed after reload, using default config")
-                self.config_data = self.create_default_config()
-            print("Configuration reloaded successfully")
+                print("ERROR: Config validation failed after reload!")
+                print("Please check your config.json file for missing sections.")
+            else:
+                print("Configuration reloaded successfully")
         except Exception as e:
             print(f"Error reloading configuration: {e}")
 
-# Global config instance with error handling
+# Global config instance
 try:
     config = Config()
     if not config.validate_config():
-        print("Config validation failed, recreating default config")
-        config.config_data = config.create_default_config()
+        print("ERROR: Config validation failed! Please check your config.json file.")
 except Exception as e:
-    print(f"Critical error initializing config: {e}")
-    # Create a minimal config to prevent total failure
+    print(f"CRITICAL ERROR: Failed to load config: {e}")
+    print("Please ensure config.json exists and is properly formatted.")
+    # Create a minimal fallback to prevent total crash
     class FallbackConfig:
         def get(self, key, default=None):
             return default
         @property
         def database(self):
-            return {"host": "localhost", "port": 3306, "user": "root", "password": "", "database": "childe"}
+            return {"host": "localhost", "port": 3306, "user": "", "password": "", "database": ""}
         @property 
         def bot(self):
             return {"default_prefix": "*"}
@@ -180,4 +141,4 @@ except Exception as e:
         def api(self):
             return {}
     config = FallbackConfig()
-    print("Using fallback configuration")
+    print("WARNING: Using minimal fallback configuration - bot may not work properly!")
