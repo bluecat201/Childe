@@ -5,51 +5,15 @@ import os
 from datetime import datetime, timedelta
 from discord import ButtonStyle
 from discord.ui import View, Button
+from db_helpers import db_helpers
 
-# Data files - keep these separate as they contain actual user data, not config
-SERVER_MOOD_FILE = "server_mood_data.json"
-USER_MOOD_FILE = "user_mood_data.json"
-MOOD_DATES_FILE = "mood_dates.json"
+# Load settings data
+SETTINGS_FILE = "mental_health_config.json"
+settings_data = {}
 
-# Centralized settings file
-SETTINGS_FILE = "server_settings.json"
-
-# Load server-wide mood data
-if os.path.exists(SERVER_MOOD_FILE):
-    with open(SERVER_MOOD_FILE, "r") as f:
-        server_mood_data = json.load(f)
-else:
-    server_mood_data = {}
-
-# Load user mood data
-if os.path.exists(USER_MOOD_FILE):
-    with open(USER_MOOD_FILE, "r") as f:
-        user_mood_data = json.load(f)
-else:
-    user_mood_data = {}
-
-if os.path.exists(MOOD_DATES_FILE):
-    with open(MOOD_DATES_FILE, "r") as f:
-        mood_dates_data = json.load(f)
-else:
-    mood_dates_data = {}
-
-# Load settings
 if os.path.exists(SETTINGS_FILE):
     with open(SETTINGS_FILE, "r") as f:
         settings_data = json.load(f)
-else:
-    settings_data = {
-        "guilds": {},
-        "global": {
-            "mental_health": {
-                "channels": [],
-                "ping_roles": [],
-                "frequency": 24,
-                "check_enabled": False
-            }
-        }
-    }
 
 # Helper function for mental health settings
 def get_mental_health_settings():
@@ -108,20 +72,37 @@ class MoodResponseView(discord.ui.View):
     
     async def handle_mood(self, interaction, mood):
         valid_moods = ["happy", "sad", "stressed", "calm", "tired", "motivated"]
-        guild_id = str(interaction.guild_id)
-        user_id = str(interaction.user.id)
+        guild_id = interaction.guild_id
+        user_id = interaction.user.id
 
         current_date = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
-        if user_id not in user_mood_data:
-            user_mood_data[user_id] = {m: 0 for m in valid_moods}
         if mood != "others":
-            user_mood_data[user_id][mood] += 1
-
-        if guild_id not in server_mood_data:
-            server_mood_data[guild_id] = {m: 0 for m in valid_moods}
-        if mood != "others":
-            server_mood_data[guild_id][mood] += 1
+            # Update user mood in database
+            await db_helpers.update_user_mood(user_id, mood)
+            
+            # Update server mood in database (we'll store this separately)
+            from database import db
+            cursor = db.connection.cursor()
+            try:
+                cursor.execute("SELECT mood_data FROM server_moods WHERE guild_id = %s", (guild_id,))
+                result = cursor.fetchone()
+                
+                if result:
+                    mood_data = json.loads(result[0]) if result[0] else {m: 0 for m in valid_moods}
+                else:
+                    mood_data = {m: 0 for m in valid_moods}
+                
+                mood_data[mood] = mood_data.get(mood, 0) + 1
+                
+                cursor.execute("""
+                    INSERT INTO server_moods (guild_id, mood_data) 
+                    VALUES (%s, %s)
+                    ON DUPLICATE KEY UPDATE mood_data = VALUES(mood_data)
+                """, (guild_id, json.dumps(mood_data)))
+                
+            finally:
+                cursor.close()
         else:
             await interaction.followup.send("Please reply with a brief description of your mood.", ephemeral=True)
             
@@ -138,20 +119,34 @@ class MoodResponseView(discord.ui.View):
                     await interaction.followup.send("I couldn't send you a DM. Please use `/mentalhealth respond others` in a channel.", ephemeral=True)
                     return
                 
-                if "others" not in server_mood_data[guild_id]:
-                    server_mood_data[guild_id]["others"] = {}
-                if "others" not in user_mood_data[user_id]:
-                    user_mood_data[user_id]["others"] = {}
+                # Update user mood with custom description
+                await db_helpers.update_user_mood(user_id, "others", mood_description)
                 
-                if mood_description not in server_mood_data[guild_id]["others"]:
-                    server_mood_data[guild_id]["others"][mood_description] = 1
-                else:
-                    server_mood_data[guild_id]["others"][mood_description] += 1
-
-                if mood_description not in user_mood_data[user_id]["others"]:
-                    user_mood_data[user_id]["others"][mood_description] = 1
-                else:
-                    user_mood_data[user_id]["others"][mood_description] += 1
+                # Update server mood data
+                from database import db
+                cursor = db.connection.cursor()
+                try:
+                    cursor.execute("SELECT mood_data FROM server_moods WHERE guild_id = %s", (guild_id,))
+                    result = cursor.fetchone()
+                    
+                    if result:
+                        mood_data = json.loads(result[0]) if result[0] else {}
+                    else:
+                        mood_data = {}
+                    
+                    if "others" not in mood_data:
+                        mood_data["others"] = {}
+                    
+                    mood_data["others"][mood_description] = mood_data["others"].get(mood_description, 0) + 1
+                    
+                    cursor.execute("""
+                        INSERT INTO server_moods (guild_id, mood_data) 
+                        VALUES (%s, %s)
+                        ON DUPLICATE KEY UPDATE mood_data = VALUES(mood_data)
+                    """, (guild_id, json.dumps(mood_data)))
+                    
+                finally:
+                    cursor.close()
                 
                 await dm_channel.send("Thank you for your response. Your mood has been recorded.")
                 
@@ -159,16 +154,8 @@ class MoodResponseView(discord.ui.View):
                 await interaction.followup.send("No response received or an error occurred. Your mood was not recorded.", ephemeral=True)
                 return
 
-        if guild_id not in mood_dates_data:
-            mood_dates_data[guild_id] = {}
-        if user_id not in mood_dates_data[guild_id]:
-            mood_dates_data[guild_id][user_id] = []
-        
-        mood_record = {
-            "mood": mood,
-            "date": current_date
-        }
-        mood_dates_data[guild_id][user_id].append(mood_record)
+        # Save mood date record to database
+        await db_helpers.add_mood_date(user_id, guild_id, mood, current_date)
 
         self.cog.save_mood_data()
 
@@ -313,11 +300,22 @@ class MentalHealthCheck(commands.Cog):
     async def stats(self, ctx):
         guild_id = str(ctx.guild.id)
         
-        if guild_id not in server_mood_data:
-            await ctx.send("No data available for this server.")
-            return
-
-        guild_stats = server_mood_data[guild_id]
+        # Get server mood data from database
+        from database import db
+        cursor = db.connection.cursor()
+        try:
+            cursor.execute("SELECT mood_data FROM server_moods WHERE guild_id = %s", (guild_id,))
+            result = cursor.fetchone()
+            
+            if not result or not result[0]:
+                await ctx.send("No data available for this server.")
+                return
+            
+            guild_stats = json.loads(result[0])
+            
+        finally:
+            cursor.close()
+        
         response = f"Mental Health Check Stats:\n"
         for mood, count in guild_stats.items():
             if isinstance(count, dict):  # Handle "others" category
@@ -405,44 +403,41 @@ class MentalHealthCheck(commands.Cog):
         # Get current timestamp for when the mood is recorded
         current_date = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
-        # Update user mood data
-        if user_id not in user_mood_data:
-            user_mood_data[user_id] = {m: 0 for m in valid_moods}
         if mood != "others":
-            user_mood_data[user_id][mood] += 1
-
-        # Update server mood data
-        if guild_id not in server_mood_data:
-            server_mood_data[guild_id] = {m: 0 for m in valid_moods}
-        if mood != "others":
-            server_mood_data[guild_id][mood] += 1
+            # Update user mood in database
+            await db_helpers.update_user_mood(user_id, mood)
+            
+            # Update server mood in database
+            from database import db
+            cursor = db.connection.cursor()
+            try:
+                cursor.execute("SELECT mood_data FROM server_moods WHERE guild_id = %s", (guild_id,))
+                result = cursor.fetchone()
+                
+                if result:
+                    mood_data = json.loads(result[0]) if result[0] else {m: 0 for m in valid_moods}
+                else:
+                    mood_data = {m: 0 for m in valid_moods}
+                
+                mood_data[mood] = mood_data.get(mood, 0) + 1
+                
+                cursor.execute("""
+                    INSERT INTO server_moods (guild_id, mood_data) 
+                    VALUES (%s, %s)
+                    ON DUPLICATE KEY UPDATE mood_data = VALUES(mood_data)
+                """, (guild_id, json.dumps(mood_data)))
+                
+            finally:
+                cursor.close()
         else:
             await self.handle_others(ctx, guild_id, user_id)
 
-        # Log the mood response with the date into the mood_dates_data
-        if guild_id not in mood_dates_data:
-            mood_dates_data[guild_id] = {}
-        if user_id not in mood_dates_data[guild_id]:
-            mood_dates_data[guild_id][user_id] = []
-        
-        mood_record = {
-            "mood": mood,
-            "date": current_date
-        }
-        mood_dates_data[guild_id][user_id].append(mood_record)
-
-        # Save the data back to the file
-        self.save_mood_data()
+        # Save mood date record to database
+        await db_helpers.add_mood_date(user_id, guild_id, mood, current_date)
 
         await ctx.send(f"Thank you for responding! Your mood ({mood}) has been recorded.")
 
     async def handle_others(self, ctx, guild_id, user_id):
-        if "others" not in server_mood_data[guild_id]:
-                server_mood_data[guild_id]["others"] = {}
-
-        if "others" not in user_mood_data[user_id]:
-                user_mood_data[user_id]["others"] = {}
-
         await ctx.send("Please provide a brief description of your mood.")
         def check(msg):
             return msg.author == ctx.author and msg.channel == ctx.channel
@@ -451,15 +446,34 @@ class MentalHealthCheck(commands.Cog):
             description = await self.bot.wait_for("message", timeout=60.0, check=check)
             mood_description = description.content
 
-            if mood_description not in server_mood_data[guild_id]["others"]:
-                server_mood_data[guild_id]["others"][mood_description] = 1
-            else:
-                server_mood_data[guild_id]["others"][mood_description] += 1
-
-            if mood_description not in user_mood_data[user_id]["others"]:
-                user_mood_data[user_id]["others"][mood_description] = 1
-            else:
-                user_mood_data[user_id]["others"][mood_description] += 1
+            # Update user mood with custom description
+            await db_helpers.update_user_mood(user_id, "others", mood_description)
+            
+            # Update server mood data
+            from database import db
+            cursor = db.connection.cursor()
+            try:
+                cursor.execute("SELECT mood_data FROM server_moods WHERE guild_id = %s", (guild_id,))
+                result = cursor.fetchone()
+                
+                if result:
+                    mood_data = json.loads(result[0]) if result[0] else {}
+                else:
+                    mood_data = {}
+                
+                if "others" not in mood_data:
+                    mood_data["others"] = {}
+                
+                mood_data["others"][mood_description] = mood_data["others"].get(mood_description, 0) + 1
+                
+                cursor.execute("""
+                    INSERT INTO server_moods (guild_id, mood_data) 
+                    VALUES (%s, %s)
+                    ON DUPLICATE KEY UPDATE mood_data = VALUES(mood_data)
+                """, (guild_id, json.dumps(mood_data)))
+                
+            finally:
+                cursor.close()
 
         except:
             await ctx.send("No response received, mood not recorded.")
@@ -467,11 +481,12 @@ class MentalHealthCheck(commands.Cog):
     @mentalhealth.command(name="mystats")
     async def mystats(self, ctx):
         user_id = str(ctx.author.id)
-        if user_id not in user_mood_data:
+        user_stats = await db_helpers.get_user_mood_data(user_id)
+        
+        if not user_stats:
             await ctx.send("You have not provided any mood responses yet.")
             return
 
-        user_stats = user_mood_data[user_id]
         response = f"Your Mental Health Stats:\n"
         for mood, count in user_stats.items():
             if isinstance(count, dict):  # Handle "others" category
@@ -486,17 +501,6 @@ class MentalHealthCheck(commands.Cog):
         """Save settings to the centralized settings file"""
         with open(SETTINGS_FILE, "w") as f:
             json.dump(settings_data, f, indent=4)
-    
-    def save_mood_data(self):
-        """Save mood data to their respective files"""
-        with open(SERVER_MOOD_FILE, "w") as f:
-            json.dump(server_mood_data, f, indent=4)
-
-        with open(USER_MOOD_FILE, "w") as f:
-            json.dump(user_mood_data, f, indent=4)
-
-        with open(MOOD_DATES_FILE, "w") as f:
-            json.dump(mood_dates_data, f, indent=4)
 
 async def setup(bot):
     await bot.add_cog(MentalHealthCheck(bot))

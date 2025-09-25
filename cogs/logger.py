@@ -5,6 +5,7 @@ from discord.ext import commands
 from discord.ext.commands import MissingPermissions
 from datetime import datetime
 import aiofiles
+from db_helpers import db_helpers
 
 SETTINGS_FILE = "server_settings.json"
 LOGS_DIRECTORY = "logs"  # Main logs directory
@@ -17,39 +18,13 @@ class Logger(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    def get_log_channel(self, guild_id):
-        """Get log channel ID from centralized settings"""
-        if os.path.exists(SETTINGS_FILE):
-            with open(SETTINGS_FILE, "r") as f:
-                settings = json.load(f)
-                
-            guild_id = str(guild_id)
-            return settings.get("guilds", {}).get(guild_id, {}).get("logging", {}).get("log_channel_id")
-        return None
+    async def get_log_channel(self, guild_id):
+        """Get log channel ID from database"""
+        return await db_helpers.get_server_setting(str(guild_id), "log_channel")
 
-    def set_log_channel(self, guild_id, channel_id):
-        """Update log channel in centralized settings"""
-        guild_id = str(guild_id)
-        
-        if os.path.exists(SETTINGS_FILE):
-            with open(SETTINGS_FILE, "r") as f:
-                settings = json.load(f)
-        else:
-            settings = {"guilds": {}}
-            
-        # Create nested structure if not exists
-        if guild_id not in settings.get("guilds", {}):
-            settings["guilds"][guild_id] = {}
-            
-        if "logging" not in settings["guilds"][guild_id]:
-            settings["guilds"][guild_id]["logging"] = {}
-            
-        # Set the log channel
-        settings["guilds"][guild_id]["logging"]["log_channel_id"] = channel_id
-        
-        # Save settings
-        with open(SETTINGS_FILE, "w") as f:
-            json.dump(settings, f, indent=2)
+    async def set_log_channel(self, guild_id, channel_id):
+        """Update log channel in database"""
+        await db_helpers.set_server_setting(str(guild_id), "log_channel", channel_id)
     
     async def log_to_file(self, guild_id, guild_name, title, description):
         """Write log entry to file"""
@@ -76,7 +51,7 @@ class Logger(commands.Cog):
     @commands.command(name="set-logs-channel")
     @commands.has_permissions(administrator=True)
     async def set_logs_channel(self, ctx, channel: discord.TextChannel):
-        self.set_log_channel(ctx.guild.id, channel.id)
+        await self.set_log_channel(ctx.guild.id, channel.id)
         await ctx.send(f"The logging channel has been set to {channel.mention}")
 
     async def send_log(self, guild_id, title, description, color=discord.Color.blue(), files=None, embeds=None):
@@ -89,8 +64,8 @@ class Logger(commands.Cog):
         await self.log_to_file(guild_id, guild.name, title, description)
         
         # Log to Discord
-        log_channel_id = self.get_log_channel(guild_id)
-        if log_channel_id and (channel := self.bot.get_channel(log_channel_id)):
+        log_channel_id = await self.get_log_channel(guild_id)
+        if log_channel_id and (channel := self.bot.get_channel(int(log_channel_id))):
             embed = discord.Embed(title=title, description=description, color=color)
             if embeds:
                 for e in embeds:
@@ -150,7 +125,7 @@ class Logger(commands.Cog):
     
     @commands.Cog.listener()
     async def on_guild_channel_update(self, before, after):
-        if before.id == self.get_log_channel(before.guild.id):
+        if before.id == await self.get_log_channel(before.guild.id):
             return
         changes = []
         if before.name != after.name:
@@ -311,7 +286,7 @@ class Logger(commands.Cog):
     async def on_message_delete(self, message):
         if message.author.bot:
             return
-        if message.guild and message.channel.id == self.get_log_channel(message.guild.id):
+        if message.guild and message.channel.id == await self.get_log_channel(message.guild.id):
             return
         files = [await attachment.to_file() for attachment in message.attachments]
         embeds = message.embeds if message.embeds else None
@@ -354,11 +329,11 @@ class Logger(commands.Cog):
         await self.log_to_file(guild.id, guild.name, "Bulk Message Deletion", f"{bulk_msg_log}\n{bulk_msg_details}")
         
         # Continue with Discord logging
-        log_channel_id = self.get_log_channel(guild.id)
+        log_channel_id = await self.get_log_channel(guild.id)
         if not log_channel_id:
             return
 
-        log_channel = self.bot.get_channel(log_channel_id)
+        log_channel = self.bot.get_channel(int(log_channel_id))
         if not log_channel:
             return
         

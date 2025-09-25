@@ -3,22 +3,12 @@ from discord import app_commands
 from discord.ext import commands
 import json
 import os
-
-ANNOUNCEMENT_SETTINGS_FILE = "announcement_settings.json"
+from db_helpers import db_helpers
 
 class Announcement(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.creator_id = 443842350377336860
-        if os.path.exists(ANNOUNCEMENT_SETTINGS_FILE):
-            with open(ANNOUNCEMENT_SETTINGS_FILE, "r") as f:
-                self.settings = json.load(f)
-        else:
-            self.settings = {}
-
-    def save_settings(self):
-        with open(ANNOUNCEMENT_SETTINGS_FILE, "w") as f:
-            json.dump(self.settings, f, indent=4)
 
     def is_creator(ctx):
         return ctx.author.id == ctx.cog.creator_id
@@ -26,28 +16,28 @@ class Announcement(commands.Cog):
     @commands.command(name="setchannel")
     @commands.check(is_creator)
     async def set_channel(self, ctx, channel: discord.TextChannel):
-        self.settings["channel_id"] = channel.id
-        self.save_settings()
+        await db_helpers.set_announcement_setting("channel_id", channel.id)
         await ctx.send(f"Oznamovací kanál nastaven na {channel.mention}.")
 
     @commands.command(name="setmessage")
     @commands.check(is_creator)
     async def set_message(self, ctx, *, message: str):
-        self.settings["message"] = message
-        self.save_settings()
+        await db_helpers.set_announcement_setting("message", message)
         await ctx.send("Zpráva pro oznámení byla úspěšně nastavena.")
 
     @commands.command(name="announce")
     @commands.check(is_creator)
     async def announce(self, ctx):
-        channel_id = self.settings.get("channel_id")
-        message = self.settings.get("message")
+        # Get announcement settings from database
+        settings = await db_helpers.get_announcement_settings()
+        channel_id = settings.get("channel_id")
+        message = settings.get("message")
 
         if not channel_id or not message:
             await ctx.send("Kanál nebo zpráva nebyly nastaveny. Použijte příkazy `setchannel` a `setmessage`.")
             return
 
-        channel = self.bot.get_channel(channel_id)
+        channel = self.bot.get_channel(int(channel_id))
         if not channel:
             await ctx.send("Nepodařilo se najít nastavený kanál. Ujistěte se, že kanál stále existuje.")
             return

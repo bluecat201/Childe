@@ -3,6 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import json
 import random
+from db_helpers import db_helpers
 
 class SlashEconomy(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -15,38 +16,24 @@ class SlashEconomy(commands.Cog):
         {"name": "PC", "price": 10000, "description": "PC for playing games"}
     ]
 
-    # Helper function for getting bank data
+    # Helper functions now use database
     async def get_bank_data(self):
-        with open("mainbank.json", "r") as f:
-            return json.load(f)
+        return await db_helpers.get_all_bank_data()
 
-    # Helper function for creating accounts
     async def open_account(self, user: discord.User):
-        users = await self.get_bank_data()
-        if str(user.id) in users:
-            return False
-        else:
-            users[str(user.id)] = {"wallet": 0, "bank": 0, "bag": []}
-        with open("mainbank.json", "w") as f:
-            json.dump(users, f)
-        return True
+        return await db_helpers.create_bank_account(str(user.id))
 
-    # Helper function for updating bank balances
     async def update_bank(self, user: discord.User, change=0, mode="wallet"):
-        users = await self.get_bank_data()
-        users[str(user.id)][mode] += change
-        with open("mainbank.json", "w") as f:
-            json.dump(users, f)
-        return [users[str(user.id)]["wallet"], users[str(user.id)]["bank"]]
+        return await db_helpers.update_bank_balance(str(user.id), change, mode)
 
     #Balance
     @app_commands.command(name="balance", description="It will show the status of your account")
     async def balance(self, interaction: discord.Interaction, member: discord.Member = None):
         user = interaction.user if member is None else member
         await self.open_account(user)
-        users = await self.get_bank_data()
-        wallet_amt = users[str(user.id)]["wallet"]
-        bank_amt = users[str(user.id)]["bank"]
+        bank_data = await db_helpers.get_bank_data(str(user.id))
+        wallet_amt = bank_data["wallet"]
+        bank_amt = bank_data["bank"]
 
         em = discord.Embed(title=f"{user.name}'s balance", color=discord.Color.red())
         em.add_field(name="Wallet", value=wallet_amt)

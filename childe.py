@@ -14,8 +14,8 @@ import subprocess
 from datetime import datetime
 # from gemini_api import ChatSession
 from perplexity_api import ChatSession
-from migration import MigrationManager
 from config import config
+from db_helpers import db_helpers
 DEFAULT_PREFIX = config.get("bot.default_prefix", "*")
 PREFIX_FILE = "prefixes.json"
 WARNINGS_FILE = "warnings.json"
@@ -31,26 +31,16 @@ def get_version():
     except Exception:
         return "Unknown Version"
 
-CURRENT_VERSION = "Beta 0.4.3"
-
-if os.path.exists(SETTINGS_FILE):
-    with open(SETTINGS_FILE, "r") as f:
-        custom_prefixes = json.load(f)
-else:
-    custom_prefixes = {}
+CURRENT_VERSION = "Beta 0.4.4"
 
 async def determine_prefix(bot, message):
     if not message.guild:
         return DEFAULT_PREFIX
 
     guild_id = str(message.guild.id)
-    if os.path.exists(SETTINGS_FILE):
-        with open(SETTINGS_FILE, "r") as f:
-            settings = json.load(f)
-    else:
-        settings = {"guilds": {}}
-    prefix = settings.get("guilds", {}).get(guild_id, {}).get("prefix", DEFAULT_PREFIX)
-    return prefix
+    # Get prefix from database  
+    prefix = await db_helpers.get_server_setting(guild_id, "prefix")
+    return prefix or DEFAULT_PREFIX
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -300,17 +290,9 @@ async def change_prefix(ctx, prefix: str):
     if not prefix:
         await ctx.send("You need to specify a prefix.")
         return
-    guild_id = str(ctx.guild.id)
-    if os.path.exists(SETTINGS_FILE):
-        with open(SETTINGS_FILE, "r") as f:
-            settings = json.load(f)
-    else:
-        settings = {"guilds": {}}
-    if guild_id not in settings.get("guilds", {}):
-        settings["guilds"][guild_id] = {}
-    settings["guilds"][guild_id]["prefix"] = prefix
-    with open(SETTINGS_FILE, "w") as f:
-        json.dump(settings, f, indent=2)
+    
+    # Save prefix to database
+    await db_helpers.set_server_setting(str(ctx.guild.id), "prefix", prefix)
     await ctx.send(f"Prefix changed to: `{prefix}`")
 
 # --- LOGGING EVENTS ---
@@ -334,37 +316,6 @@ async def on_ready():
         await channel.send(embed=embed)
     else:
         print(f'Channel with ID {channel_id} not found.')
-    
-    # Run database migration
-    try:
-        migration_manager = MigrationManager(bot)
-        migration_report = await migration_manager.run_migration()
-        
-        # Send migration results to the same channel
-        if channel:
-            migration_embed = migration_manager.create_migration_embed(migration_report)
-            await channel.send(embed=migration_embed)
-            
-            # Log migration summary
-            if migration_report["status"] == "completed":
-                total_records = migration_report.get("migration_results", {}).get("total_records", 0)
-                print(f"Migration completed successfully! Migrated {total_records} records to database.")
-            elif migration_report["status"] == "already_completed":
-                print("Migration was already completed previously.")
-            elif migration_report["status"] == "failed":
-                print(f"Migration failed: {migration_report.get('error', 'Unknown error')}")
-        else:
-            print("Could not send migration embed - channel not found")
-            
-    except Exception as e:
-        print(f"Migration process failed: {str(e)}")
-        if channel:
-            error_embed = discord.Embed(
-                title="❌ Migration Error",
-                description=f"Failed to run database migration: {str(e)}",
-                color=0xff0000
-            )
-            await channel.send(embed=error_embed)
 
 @bot.event
 async def on_member_join(member):

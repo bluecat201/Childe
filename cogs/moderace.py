@@ -3,21 +3,13 @@ import discord
 from discord.ext import commands
 import json
 import os
+from db_helpers import db_helpers
 
 SETTINGS_FILE = "server_settings.json"
-# Keep WARNINGS_FILE for backwards compatibility during transition
-WARNINGS_FILE = "warnings.json"
 
 class Moderace(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-
-        # Načítání warnů - eventually these should be migrated to settings file
-        if os.path.exists(WARNINGS_FILE):
-            with open(WARNINGS_FILE, "r") as f:
-                self.warnings = json.load(f)
-        else:
-            self.warnings = {}
 
     #ban
     @commands.command(aliases=['Ban', 'BAN'], help="Zabanuješ uživatele")
@@ -130,26 +122,9 @@ class Moderace(commands.Cog):
         if not prefix:
             return await ctx.send("Musíte zadat nový prefix.")
 
-        guild_id = str(ctx.guild.id)
+        # Save prefix to database
+        await db_helpers.set_server_setting(str(ctx.guild.id), "prefix", prefix)
         
-        # Load settings file
-        if os.path.exists(SETTINGS_FILE):
-            with open(SETTINGS_FILE, "r") as f:
-                settings = json.load(f)
-        else:
-            settings = {"guilds": {}}
-
-        # Create guild entry if it doesn't exist
-        if guild_id not in settings["guilds"]:
-            settings["guilds"][guild_id] = {}
-        
-        # Set prefix in the new structure
-        settings["guilds"][guild_id]["prefix"] = prefix
-
-        # Save back to centralized settings file
-        with open(SETTINGS_FILE, "w") as f:
-            json.dump(settings, f, indent=2)
-
         await ctx.send(f"Prefix nastaven na: {prefix}")
     
     #Set prefix error
@@ -219,38 +194,24 @@ class Moderace(commands.Cog):
         if not reason:
             return await ctx.send("Musíte uvést důvod.")
         
-        guild_id = str(ctx.guild.id)
-        member_id = str(member.id)
+        # Add warning to database
+        await db_helpers.add_warning(str(member.id), str(ctx.guild.id), reason, ctx.author.id)
         
-        if guild_id not in self.warnings:
-            self.warnings[guild_id] = {}
-        
-        if member_id not in self.warnings[guild_id]:
-            self.warnings[guild_id][member_id] = []
-
-        self.warnings[guild_id][member_id].append({
-            "reason": reason,
-            "admin": ctx.author.id
-        })
-
-        with open(WARNINGS_FILE, "w") as f:
-            json.dump(self.warnings, f)
-
         await ctx.send(f"{member.mention} byl varován. Důvod: {reason}")
 
     #warnings
     @commands.command(aliases=['Warnings'], help="Zobrazí varování uživatele.")
     @commands.has_permissions(administrator=True)
     async def warnings(self, ctx, member: discord.Member):
-        guild_id = str(ctx.guild.id)
-        member_id = str(member.id)
-
-        if guild_id not in self.warnings or member_id not in self.warnings[guild_id]:
+        # Get warnings from database
+        user_warnings = await db_helpers.get_user_warnings(str(member.id), str(ctx.guild.id))
+        
+        if not user_warnings:
             return await ctx.send(f"{member.mention} nemá žádná varování.")
 
         embed = discord.Embed(title=f"Varování uživatele {member.name}", color=discord.Color.red())
-        for idx, warning in enumerate(self.warnings[guild_id][member_id], 1):
-            admin = ctx.guild.get_member(warning["admin"])
+        for idx, warning in enumerate(user_warnings, 1):
+            admin = ctx.guild.get_member(warning["admin_id"])
             admin_name = admin.name if admin else "Neznámý"
             embed.add_field(
                 name=f"Varování {idx}",
