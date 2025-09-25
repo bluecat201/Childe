@@ -1,7 +1,23 @@
-import mysql.connector
+try:
+    import mysql.connector
+    from mysql.connector import Error
+    MYSQL_AVAILABLE = True
+except ImportError:
+    print("Warning: mysql-connector-python not installed. Database functionality will be disabled.")
+    print("Install it with: pip install mysql-connector-python")
+    MYSQL_AVAILABLE = False
+    # Mock classes for when MySQL is not available
+    class mysql:
+        class connector:
+            @staticmethod
+            def connect(*args, **kwargs):
+                raise ImportError("MySQL connector not available")
+    
+    class Error(Exception):
+        pass
+
 import json
 import asyncio
-from mysql.connector import Error
 from typing import Dict, List, Any, Optional
 import logging
 from config import config
@@ -19,6 +35,10 @@ class DatabaseManager:
         
     async def connect(self):
         """Establish database connection"""
+        if not MYSQL_AVAILABLE:
+            logging.error("MySQL connector not available. Please install mysql-connector-python")
+            return False
+            
         try:
             self.connection = mysql.connector.connect(
                 host=self.host,
@@ -33,6 +53,9 @@ class DatabaseManager:
                 return True
         except Error as e:
             logging.error(f"Error connecting to MySQL: {e}")
+            return False
+        except Exception as e:
+            logging.error(f"Unexpected error connecting to database: {e}")
             return False
     
     async def disconnect(self):
