@@ -44,29 +44,29 @@ class Config:
             return self.create_default_config()
     
     def create_default_config(self) -> Dict[str, Any]:
-        """Create default configuration file"""
+        """Create default configuration file with placeholder values"""
         default_config = {
             "database": {
-                "host": "",
+                "host": "localhost",
                 "port": 3306,
-                "user": "",
-                "password": "",
-                "database": ""
+                "user": "YOUR_DB_USER",
+                "password": "YOUR_DB_PASSWORD",
+                "database": "YOUR_DB_NAME"
             },
             "bot": {
-                "token": "",
+                "token": "YOUR_BOT_TOKEN_HERE",
                 "default_prefix": "*",
-                "guild_id": ,
-                "announcement_channel_id": ,
-                "startup_channel_id": ,
-                "owner_user_id": ,
-                "co_owner_user_id": 
+                "guild_id": 0,
+                "announcement_channel_id": 0,
+                "startup_channel_id": 0,
+                "owner_user_id": 0,
+                "co_owner_user_id": 0
             },
             "api": {
                 "twitch": {
-                    "channel": "bluecat201",
-                    "client_id": "",
-                    "client_secret": ""
+                    "channel": "YOUR_TWITCH_CHANNEL",
+                    "client_id": "YOUR_TWITCH_CLIENT_ID",
+                    "client_secret": "YOUR_TWITCH_CLIENT_SECRET"
                 }
             }
         }
