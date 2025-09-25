@@ -4,9 +4,21 @@ This module provides database equivalents for all JSON operations
 """
 
 import json
-import mysql.connector
 from typing import Dict, List, Any, Optional, Tuple
-from database import db
+
+try:
+    import mysql.connector
+    from database import db
+    DATABASE_AVAILABLE = True
+except ImportError:
+    print("Warning: Database not available. Using fallback implementations.")
+    DATABASE_AVAILABLE = False
+    # Mock db object
+    class MockDB:
+        @property
+        def connection(self):
+            return None
+    db = MockDB()
 
 class DatabaseHelpers:
     """Helper functions for database operations used by cogs"""
@@ -15,6 +27,8 @@ class DatabaseHelpers:
     @staticmethod
     async def get_bank_data() -> Dict[str, Any]:
         """Get all economy data (replacement for mainbank.json)"""
+        if not DATABASE_AVAILABLE or not db.connection:
+            return {}
         cursor = db.connection.cursor(dictionary=True)
         try:
             cursor.execute("SELECT user_id, wallet, bank, bag FROM economy")
@@ -36,6 +50,8 @@ class DatabaseHelpers:
     @staticmethod
     async def open_account(user) -> bool:
         """Create new economy account for user"""
+        if not DATABASE_AVAILABLE or not db.connection:
+            return False
         cursor = db.connection.cursor()
         try:
             cursor.execute("""
@@ -49,6 +65,8 @@ class DatabaseHelpers:
     @staticmethod
     async def update_bank(user, change: int = 0, mode: str = "wallet") -> List[int]:
         """Update user's bank balance"""
+        if not DATABASE_AVAILABLE or not db.connection:
+            return [0, 0]
         cursor = db.connection.cursor()
         try:
             # First ensure account exists
@@ -69,6 +87,8 @@ class DatabaseHelpers:
     @staticmethod
     async def get_user_balance(user) -> Tuple[int, int]:
         """Get user's wallet and bank balance"""
+        if not DATABASE_AVAILABLE or not db.connection:
+            return (0, 0)
         cursor = db.connection.cursor()
         try:
             await DatabaseHelpers.open_account(user)
@@ -117,6 +137,8 @@ class DatabaseHelpers:
     @staticmethod
     async def get_user_bag(user) -> List[Dict[str, Any]]:
         """Get user's bag contents"""
+        if not DATABASE_AVAILABLE or not db.connection:
+            return []
         cursor = db.connection.cursor()
         try:
             await DatabaseHelpers.open_account(user)

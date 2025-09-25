@@ -18,22 +18,20 @@ class SlashEconomy(commands.Cog):
 
     # Helper functions now use database
     async def get_bank_data(self):
-        return await db_helpers.get_all_bank_data()
+        return await db_helpers.get_bank_data()
 
     async def open_account(self, user: discord.User):
-        return await db_helpers.create_bank_account(str(user.id))
+        return await db_helpers.open_account(user)
 
     async def update_bank(self, user: discord.User, change=0, mode="wallet"):
-        return await db_helpers.update_bank_balance(str(user.id), change, mode)
+        return await db_helpers.update_bank(user, change, mode)
 
     #Balance
     @app_commands.command(name="balance", description="It will show the status of your account")
     async def balance(self, interaction: discord.Interaction, member: discord.Member = None):
         user = interaction.user if member is None else member
         await self.open_account(user)
-        bank_data = await db_helpers.get_bank_data(str(user.id))
-        wallet_amt = bank_data["wallet"]
-        bank_amt = bank_data["bank"]
+        wallet_amt, bank_amt = await db_helpers.get_user_balance(user)
 
         em = discord.Embed(title=f"{user.name}'s balance", color=discord.Color.red())
         em.add_field(name="Wallet", value=wallet_amt)
@@ -46,12 +44,8 @@ class SlashEconomy(commands.Cog):
     @app_commands.checks.cooldown(1, 3600)
     async def beg(self, interaction: discord.Interaction):
         await self.open_account(interaction.user)
-        users = await self.get_bank_data()
         earnings = random.randrange(101)
-        users[str(interaction.user.id)]["wallet"] += earnings
-
-        with open("mainbank.json", "w") as f:
-            json.dump(users, f)
+        await self.update_bank(interaction.user, earnings, "wallet")
 
         await interaction.response.send_message(f"Somebody give you {earnings} money!!")
 
@@ -63,12 +57,12 @@ class SlashEconomy(commands.Cog):
             await interaction.response.send_message("The value cannot be negative", ephemeral=True)
             return
         
-        bal = await self.update_bank(interaction.user)
-        if amount > bal[1]:
+        wallet_amt, bank_amt = await db_helpers.get_user_balance(interaction.user)
+        if amount > bank_amt:
             await interaction.response.send_message("You don't have that much money in the bank", ephemeral=True)
             return
         
-        await self.update_bank(interaction.user, amount)
+        await self.update_bank(interaction.user, amount, "wallet")
         await self.update_bank(interaction.user, -amount, "bank")
         await interaction.response.send_message(f"You have withdrawn {amount} of money")
 
@@ -82,8 +76,8 @@ class SlashEconomy(commands.Cog):
             await interaction.response.send_message("The value cannot be negative", ephemeral=True)
             return
         
-        bal = await self.update_bank(interaction.user)
-        if amount > bal[1]:
+        wallet_amt, bank_amt = await db_helpers.get_user_balance(interaction.user)
+        if amount > bank_amt:
             await interaction.response.send_message("You don't have that much money", ephemeral=True)
             return
         
@@ -182,8 +176,7 @@ class SlashEconomy(commands.Cog):
     async def bag(self, interaction: discord.Interaction):
         await self.open_account(interaction.user)
         user = interaction.user
-        users = await self.get_bank_data()
-        bag = users.get(str(user.id), {}).get("bag", [])
+        bag = await db_helpers.get_user_bag(user)
         
         if not bag:
             await interaction.response.send_message("You have empty bag.", ephemeral=True)
