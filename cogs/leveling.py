@@ -3,72 +3,61 @@ import random
 import json
 import os
 from discord.ext import commands
-
-SETTINGS_FILE = "server_settings.json"
-LEVELING_FILE = "leveling.json"  # Still keep separate file for XP data
-
-# Load XP data
-if os.path.exists(LEVELING_FILE):
-    with open(LEVELING_FILE, "r") as f:
-        leveling_data = json.load(f)
-else:
-    leveling_data = {}
-
-# Load settings data
-if os.path.exists(SETTINGS_FILE):
-    with open(SETTINGS_FILE, "r") as f:
-        settings_data = json.load(f)
-else:
-    settings_data = {"guilds": {}}
+from db_helpers import db_helpers
 
 # Helper functions for settings management
-def get_guild_settings(guild_id):
-    """Get guild settings, creating default structure if needed"""
+async def get_guild_settings(guild_id):
+    """Get guild settings from database"""
+    settings_data = await db_helpers.get_server_settings()
     guild_id = str(guild_id)
-    if guild_id not in settings_data["guilds"]:
-        settings_data["guilds"][guild_id] = {}
-    
-    return settings_data["guilds"][guild_id]
+    return settings_data.get("guilds", {}).get(guild_id, {})
 
-def is_leveling_enabled(guild_id):
+async def is_leveling_enabled(guild_id):
     """Check if leveling is enabled for a guild"""
-    guild_id = str(guild_id)
-    guild_settings = get_guild_settings(guild_id)
-    
-    if "leveling" not in guild_settings:
-        guild_settings["leveling"] = {"enabled": True}
-        
-    return guild_settings["leveling"].get("enabled", True)
+    from database import db
+    cursor = db.connection.cursor()
+    try:
+        cursor.execute("SELECT enabled FROM leveling_enabled WHERE guild_id = %s", (guild_id,))
+        result = cursor.fetchone()
+        return result[0] if result else True  # Default to enabled
+    finally:
+        cursor.close()
 
-def is_channel_ignored(guild_id, channel_id):
+async def is_channel_ignored(guild_id, channel_id):
     """Check if a channel is in the ignored list"""
-    guild_id = str(guild_id)
-    channel_id = str(channel_id)
-    guild_settings = get_guild_settings(guild_id)
-    
-    return channel_id in guild_settings.get("ignored_channels", [])
+    from database import db
+    cursor = db.connection.cursor()
+    try:
+        cursor.execute("SELECT 1 FROM ignored_channels WHERE guild_id = %s AND channel_id = %s", (guild_id, channel_id))
+        return cursor.fetchone() is not None
+    finally:
+        cursor.close()
 
-def get_level_up_channel(guild_id):
-    """Get the level up announcement channel for a guild"""
-    guild_id = str(guild_id)
-    guild_settings = get_guild_settings(guild_id)
-    
-    if "leveling" not in guild_settings:
-        guild_settings["leveling"] = {}
-        
-    return guild_settings["leveling"].get("level_up_channel_id")
+async def get_level_up_channel(guild_id):
+    """Get the level up channel ID for a guild"""
+    from database import db
+    cursor = db.connection.cursor()
+    try:
+        cursor.execute("SELECT channel_id FROM level_up_channels WHERE guild_id = %s", (guild_id,))
+        result = cursor.fetchone()
+        return result[0] if result else None
+    finally:
+        cursor.close()
 
-def get_mention_preference(user_id):
-    """Get mention preference for a user"""
-    user_id = str(user_id)
-    
-    if "users" not in settings_data:
-        settings_data["users"] = {}
-        
-    if user_id not in settings_data["users"]:
-        settings_data["users"][user_id] = {}
-        
-    return settings_data["users"][user_id].get("mention_on_levelup", True)
+async def get_mention_preference(user_id):
+    """Get user's mention preference for level up messages"""
+    from database import db
+    cursor = db.connection.cursor()
+    try:
+        cursor.execute("SELECT preferences FROM mention_prefs WHERE user_id = %s", (user_id,))
+        result = cursor.fetchone()
+        if result:
+            import json
+            prefs = json.loads(result[0]) if result[0] else {}
+            return prefs.get("mention_on_levelup", True)
+        return True  # Default to True
+    finally:
+        cursor.close()
 
 # Function to save settings
 async def save_settings():
@@ -85,81 +74,65 @@ class Leveling(commands.Cog):
         self.bot = bot
 
     async def add_xp(self, user_id, guild_id, xp_to_add):
-        guild_id_str = str(guild_id)
-        user_id_str = str(user_id)
-
-        if guild_id_str not in leveling_data:
-            leveling_data[guild_id_str] = {}
-
-        if user_id_str not in leveling_data[guild_id_str]:
-            leveling_data[guild_id_str][user_id_str] = {"xp": 0, "level": 1, "messages": 0, "total_xp": 0}
-
-        user_data = leveling_data[guild_id_str][user_id_str]
-        user_data["messages"] += 1
-        user_data["total_xp"] += xp_to_add
-        user_data["xp"] += xp_to_add
-
-        xp = user_data["xp"]
-        level = user_data["level"]
-
-        xp_needed = level * 100
-        if xp >= xp_needed:
-            user_data["level"] += 1
-            user_data["xp"] -= xp_needed
-            return True
-
-        return False
+        return await db_helpers.update_user_xp(guild_id, user_id, xp_to_add, 1)
 
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.bot or not message.guild:
             return
 
-        guild_id = str(message.guild.id)
-        channel_id = str(message.channel.id)
+        guild_id = message.guild.id
+        channel_id = message.channel.id
 
         # Check if leveling is enabled
-        if not is_leveling_enabled(guild_id):
+        if not await is_leveling_enabled(guild_id):
             return
 
         # Check if channel is ignored
-        if is_channel_ignored(guild_id, channel_id):
+        if await is_channel_ignored(guild_id, channel_id):
             return
 
         # Add XP and check level up
         leveled_up = await self.add_xp(message.author.id, message.guild.id, random.randint(5, 10))
-        await save_leveling_data()
 
         if leveled_up:
             # Get level up channel ID
-            level_up_channel_id = get_level_up_channel(guild_id)
+            level_up_channel_id = await get_level_up_channel(guild_id)
             
             # Default to current channel if no level up channel set
             channel_to_use = self.bot.get_channel(int(level_up_channel_id)) if level_up_channel_id else message.channel
             
             if channel_to_use:
-                user_id_str = str(message.author.id)
-                mention_user = get_mention_preference(message.author.id)
+                mention_user = await get_mention_preference(message.author.id)
                 mention_text = message.author.mention if mention_user else message.author.name
 
+                # Get user's current level from database
+                from database import db
+                cursor = db.connection.cursor()
+                try:
+                    cursor.execute("SELECT level FROM leveling WHERE guild_id = %s AND user_id = %s", (guild_id, message.author.id))
+                    result = cursor.fetchone()
+                    current_level = result[0] if result else 1
+                finally:
+                    cursor.close()
+
                 await channel_to_use.send(
-                    f"Congratulation, {mention_text}! Reached level {leveling_data[guild_id][user_id_str]['level']}!"
+                    f"Congratulation, {mention_text}! Reached level {current_level}!"
                 )
 
     @commands.command()
     @commands.has_permissions(administrator=True)
     async def set_ignore_channel(self, ctx, channel: discord.TextChannel):
-        guild_id = str(ctx.guild.id)
-        channel_id = str(channel.id)
+        guild_id = ctx.guild.id
+        channel_id = channel.id
         
-        guild_settings = get_guild_settings(guild_id)
-        
-        if "ignored_channels" not in guild_settings:
-            guild_settings["ignored_channels"] = []
-            
-        if channel_id not in guild_settings["ignored_channels"]:
-            guild_settings["ignored_channels"].append(channel_id)
-            await save_settings()
+        if not await is_channel_ignored(guild_id, channel_id):
+            from database import db
+            cursor = db.connection.cursor()
+            try:
+                cursor.execute("INSERT IGNORE INTO ignored_channels (guild_id, channel_id) VALUES (%s, %s)", (guild_id, channel_id))
+            finally:
+                cursor.close()
             await ctx.send(f"Channel {channel.mention} was added to list of ignored channels.")
         else:
             await ctx.send("This channel is already ignored.")
@@ -167,14 +140,16 @@ class Leveling(commands.Cog):
     @commands.command()
     @commands.has_permissions(administrator=True)
     async def remove_ignore_channel(self, ctx, channel: discord.TextChannel):
-        guild_id = str(ctx.guild.id)
-        channel_id = str(channel.id)
+        guild_id = ctx.guild.id
+        channel_id = channel.id
         
-        guild_settings = get_guild_settings(guild_id)
-        
-        if "ignored_channels" in guild_settings and channel_id in guild_settings["ignored_channels"]:
-            guild_settings["ignored_channels"].remove(channel_id)
-            await save_settings()
+        if await is_channel_ignored(guild_id, channel_id):
+            from database import db
+            cursor = db.connection.cursor()
+            try:
+                cursor.execute("DELETE FROM ignored_channels WHERE guild_id = %s AND channel_id = %s", (guild_id, channel_id))
+            finally:
+                cursor.close()
             await ctx.send(f"Channel {channel.mention} was deleted from list of ignored channels.")
         else:
             await ctx.send("This channel isn't ignored.")
@@ -182,25 +157,33 @@ class Leveling(commands.Cog):
     @commands.command()
     @commands.has_permissions(administrator=True)
     async def set_level_up_channel(self, ctx, channel: discord.TextChannel):
-        guild_id = str(ctx.guild.id)
-        guild_settings = get_guild_settings(guild_id)
+        guild_id = ctx.guild.id
         
-        if "leveling" not in guild_settings:
-            guild_settings["leveling"] = {}
-            
-        guild_settings["leveling"]["level_up_channel_id"] = str(channel.id)
-        await save_settings()
+        from database import db
+        cursor = db.connection.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO level_up_channels (guild_id, channel_id) 
+                VALUES (%s, %s)
+                ON DUPLICATE KEY UPDATE channel_id = VALUES(channel_id)
+            """, (guild_id, channel.id))
+        finally:
+            cursor.close()
         await ctx.send(f"Channel {channel.mention} was set for announcement of level up.")
 
     @commands.command()
     @commands.has_permissions(administrator=True)
     async def reset_level_up_channel(self, ctx):
-        guild_id = str(ctx.guild.id)
-        guild_settings = get_guild_settings(guild_id)
+        guild_id = ctx.guild.id
         
-        if "leveling" in guild_settings and "level_up_channel_id" in guild_settings["leveling"]:
-            del guild_settings["leveling"]["level_up_channel_id"]
-            await save_settings()
+        level_up_channel_id = await get_level_up_channel(guild_id)
+        if level_up_channel_id:
+            from database import db
+            cursor = db.connection.cursor()
+            try:
+                cursor.execute("DELETE FROM level_up_channels WHERE guild_id = %s", (guild_id,))
+            finally:
+                cursor.close()
             await ctx.send("Channel for announcement of level up was reset.")
         else:
             await ctx.send("Channel for announcement of level up wasn't set up.")
@@ -208,53 +191,64 @@ class Leveling(commands.Cog):
     @commands.command()
     @commands.has_permissions(administrator=True)
     async def toggle_leveling(self, ctx):
-        guild_id = str(ctx.guild.id)
-        guild_settings = get_guild_settings(guild_id)
+        guild_id = ctx.guild.id
         
-        if "leveling" not in guild_settings:
-            guild_settings["leveling"] = {}
-            
-        current_state = guild_settings["leveling"].get("enabled", True)
-        guild_settings["leveling"]["enabled"] = not current_state
+        current_state = await is_leveling_enabled(guild_id)
+        new_state = not current_state
         
-        await save_settings()
+        from database import db
+        cursor = db.connection.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO leveling_enabled (guild_id, enabled) 
+                VALUES (%s, %s)
+                ON DUPLICATE KEY UPDATE enabled = VALUES(enabled)
+            """, (guild_id, new_state))
+        finally:
+            cursor.close()
         
-        state_message = "on" if guild_settings["leveling"]["enabled"] else "off"
+        state_message = "on" if new_state else "off"
         await ctx.send(f"Level system is now {state_message}.")
 
     @commands.command()
     async def toggle_mention(self, ctx):
-        user_id = str(ctx.author.id)
+        user_id = ctx.author.id
         
-        if "users" not in settings_data:
-            settings_data["users"] = {}
-            
-        if user_id not in settings_data["users"]:
-            settings_data["users"][user_id] = {}
-            
-        current_pref = settings_data["users"][user_id].get("mention_on_levelup", True)
-        settings_data["users"][user_id]["mention_on_levelup"] = not current_pref
+        current_pref = await get_mention_preference(user_id)
+        new_pref = not current_pref
         
-        await save_settings()
+        from database import db
+        cursor = db.connection.cursor()
+        try:
+            import json
+            cursor.execute("""
+                INSERT INTO mention_prefs (user_id, preferences) 
+                VALUES (%s, %s)
+                ON DUPLICATE KEY UPDATE preferences = VALUES(preferences)
+            """, (user_id, json.dumps({"mention_on_levelup": new_pref})))
+        finally:
+            cursor.close()
         
-        state_message = "on" if settings_data["users"][user_id]["mention_on_levelup"] else "off"
+        state_message = "on" if new_pref else "off"
         await ctx.send(f"Mention at level up is now {state_message}.")
 
-    # Leaderboard and level commands remain unchanged
     @commands.command()
     async def leaderboard(self, ctx):
-        guild_id = str(ctx.guild.id)
+        guild_id = ctx.guild.id
 
-        if guild_id not in leveling_data or not leveling_data[guild_id]:
+        leaderboard_data = await db_helpers.get_guild_leaderboard(guild_id, 10)
+        
+        if not leaderboard_data:
             await ctx.send("Nobody has any xp right now.")
             return
 
-        sorted_users = sorted(leveling_data[guild_id].items(), key=lambda x: (x[1]['level'], x[1]['total_xp']), reverse=True)
         leaderboard_text = ""
-
-        for i, (user_id, data) in enumerate(sorted_users[:10], 1):
-            user = await self.bot.fetch_user(int(user_id))
-            leaderboard_text += f"{i}. {user.name}: Level {data['level']} ({data['total_xp']} total XP, {data['messages']} messages)\n"
+        for i, data in enumerate(leaderboard_data, 1):
+            try:
+                user = await self.bot.fetch_user(int(data['user_id']))
+                leaderboard_text += f"{i}. {user.name}: Level {data['level']} ({data['total_xp']} total XP, {data['messages']} messages)\n"
+            except:
+                leaderboard_text += f"{i}. Unknown User: Level {data['level']} ({data['total_xp']} total XP, {data['messages']} messages)\n"
 
         embed = discord.Embed(title="Top 10 chatters", description=leaderboard_text, color=discord.Color.blue())
         await ctx.send(embed=embed)
@@ -262,14 +256,22 @@ class Leveling(commands.Cog):
     @commands.command()
     async def level(self, ctx, member: discord.Member = None):
         member = member or ctx.author
-        guild_id = str(ctx.guild.id)
-        user_id = str(member.id)
+        guild_id = ctx.guild.id
+        user_id = member.id
 
-        if guild_id in leveling_data and user_id in leveling_data[guild_id]:
-            user_data = leveling_data[guild_id][user_id]
-            await ctx.send(f"{member.mention} has level {user_data['level']}, {user_data['total_xp']} total XP and sent {user_data['messages']} messages.")
-        else:
-            await ctx.send(f"{member.mention} doesn't have any level and XP.")
+        from database import db
+        cursor = db.connection.cursor()
+        try:
+            cursor.execute("SELECT level, total_xp, messages FROM leveling WHERE guild_id = %s AND user_id = %s", (guild_id, user_id))
+            result = cursor.fetchone()
+            
+            if result:
+                level, total_xp, messages = result
+                await ctx.send(f"{member.mention} has level {level}, {total_xp} total XP and sent {messages} messages.")
+            else:
+                await ctx.send(f"{member.mention} doesn't have any level and XP.")
+        finally:
+            cursor.close()
 
 async def setup(bot):
     await bot.add_cog(Leveling(bot))

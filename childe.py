@@ -14,7 +14,9 @@ import subprocess
 from datetime import datetime
 # from gemini_api import ChatSession
 from perplexity_api import ChatSession
-DEFAULT_PREFIX = "!"
+from migration import MigrationManager
+from config import config
+DEFAULT_PREFIX = config.get("bot.default_prefix", "*")
 PREFIX_FILE = "prefixes.json"
 WARNINGS_FILE = "warnings.json"
 SETTINGS_FILE = "server_settings.json"
@@ -55,13 +57,15 @@ intents.message_content = True
 intents.guilds = True
 intents.members = True
 
-GUILD_ID = 535890114258141184 
-TWITCH_CHANNEL = "bluecat201"
-ANNOUNCEMENT_CHANNEL_ID = 592348081362829312
-CLIENT_ID = "hkn3fxk347cduph95gem7n22u2xod9"
-CLIENT_SECRET = "wf4j6ts074b94qvp2z44e7d4aha3e6"
-YOUR_USER_ID = 443842350377336860
-CO_OWNER_USER_ID = 1335248197467242519
+# Load configuration values
+GUILD_ID = config.get("bot.guild_id", 535890114258141184)
+TWITCH_CHANNEL = config.get("api.twitch.channel", "bluecat201")
+ANNOUNCEMENT_CHANNEL_ID = config.get("bot.announcement_channel_id", 592348081362829312)
+CLIENT_ID = config.get("api.twitch.client_id", "")
+CLIENT_SECRET = config.get("api.twitch.client_secret", "")
+YOUR_USER_ID = config.get("bot.owner_user_id", 443842350377336860)
+CO_OWNER_USER_ID = config.get("bot.co_owner_user_id", 1335248197467242519)
+STARTUP_CHANNEL_ID = config.get("bot.startup_channel_id", 1325107856801923113)
 
 # --- Custom Bot Class with setup_hook ---
 class CustomBot(commands.Bot):
@@ -315,8 +319,10 @@ async def on_ready():
     print(f'Connected to bot: {bot.user.name}')
     print(f'Bot ID: {bot.user.id}')
     await bot.change_presence(activity=discord.Streaming(name=f'{CURRENT_VERSION}', url='https://www.twitch.tv/bluecatlive'))
-    channel_id = 1325107856801923113
+    channel_id = STARTUP_CHANNEL_ID
     channel = bot.get_channel(channel_id)
+    
+    # Send bot ready embed
     if channel:
         embed = discord.Embed(
             title="Bot is Ready! ✅", 
@@ -328,6 +334,37 @@ async def on_ready():
         await channel.send(embed=embed)
     else:
         print(f'Channel with ID {channel_id} not found.')
+    
+    # Run database migration
+    try:
+        migration_manager = MigrationManager(bot)
+        migration_report = await migration_manager.run_migration()
+        
+        # Send migration results to the same channel
+        if channel:
+            migration_embed = migration_manager.create_migration_embed(migration_report)
+            await channel.send(embed=migration_embed)
+            
+            # Log migration summary
+            if migration_report["status"] == "completed":
+                total_records = migration_report.get("migration_results", {}).get("total_records", 0)
+                print(f"Migration completed successfully! Migrated {total_records} records to database.")
+            elif migration_report["status"] == "already_completed":
+                print("Migration was already completed previously.")
+            elif migration_report["status"] == "failed":
+                print(f"Migration failed: {migration_report.get('error', 'Unknown error')}")
+        else:
+            print("Could not send migration embed - channel not found")
+            
+    except Exception as e:
+        print(f"Migration process failed: {str(e)}")
+        if channel:
+            error_embed = discord.Embed(
+                title="❌ Migration Error",
+                description=f"Failed to run database migration: {str(e)}",
+                color=0xff0000
+            )
+            await channel.send(embed=error_embed)
 
 @bot.event
 async def on_member_join(member):

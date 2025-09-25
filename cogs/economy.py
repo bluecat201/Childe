@@ -3,6 +3,7 @@ from discord.ext import commands
 import json
 import random
 from discord.ext.commands import CommandOnCooldown
+from db_helpers import db_helpers
 
 
 class Economy(commands.Cog, name="Economy"):
@@ -18,32 +19,21 @@ class Economy(commands.Cog, name="Economy"):
 
     # Helper function for getting bank data
     async def get_bank_data(self):
-        with open("mainbank.json", "r") as f:
-            return json.load(f)
+        return await db_helpers.get_bank_data()
 
     # Helper function for creating accounts
     async def open_account(self, user):
-        users = await self.get_bank_data()
-        if str(user.id) in users:
-            return False
-        else:
-            users[str(user.id)] = {"wallet": 0, "bank": 0, "bag": []}
-        with open("mainbank.json", "w") as f:
-            json.dump(users, f)
-        return True
+        return await db_helpers.open_account(user)
 
     # Helper function for updating bank balances
     async def update_bank(self, user, change=0, mode="wallet"):
-        users = await self.get_bank_data()
-        users[str(user.id)][mode] += change
-        with open("mainbank.json", "w") as f:
-            json.dump(users, f)
-        return [users[str(user.id)]["wallet"], users[str(user.id)]["bank"]]
+        return await db_helpers.update_bank(user, change, mode)
 
     # Helper function for buying items
     async def buy_this(self, user, item_name, amount):
         item_name = item_name.lower()
         name_ = None
+        price = 0
         for item in self.mainshop:
             name = item["name"].lower()
             if name == item_name:
@@ -52,33 +42,15 @@ class Economy(commands.Cog, name="Economy"):
                 break
         if name_ is None:
             return [False, 1]
+        
         cost = price * amount
-        users = await self.get_bank_data()
         bal = await self.update_bank(user)
         if bal[0] < cost:
             return [False, 2]
-        try:
-            index = 0
-            t = None
-            for thing in users[str(user.id)]["bag"]:
-                n = thing["item"]
-                if n == item_name:
-                    old_amt = thing["amount"]
-                    new_amt = old_amt + amount
-                    users[str(user.id)]["bag"][index]["amount"] = new_amt
-                    t = 1
-                    break
-                index += 1
-            if t is None:
-                obj = {"item": item_name, "amount": amount}
-                users[str(user.id)]["bag"].append(obj)
-        except KeyError:
-            obj = {"item": item_name, "amount": amount}
-            users[str(user.id)]["bag"] = [obj]
-        with open("mainbank.json", "w") as f:
-            json.dump(users, f)
-        await self.update_bank(user, -cost, "wallet")
-        return [True, "Worked"]
+        
+        # Use database helper to buy item
+        success = await db_helpers.buy_item(user, item_name, amount, price)
+        return [success, "Worked" if success else "Failed"]
 
 
     #Balance
@@ -100,13 +72,10 @@ class Economy(commands.Cog, name="Economy"):
     async def beg(self, ctx):
         try:
             await self.open_account(ctx.author)
-            users = await self.get_bank_data()
             user = ctx.author
             earnings = random.randrange(101)
             await ctx.send(f"Somebody give you {earnings} money!!")
-            users[str(user.id)]["wallet"] += earnings
-            with open("mainbank.json", "w") as f:
-                json.dump(users, f)
+            await self.update_bank(user, earnings, "wallet")
         except CommandOnCooldown as e:
             remaining_time = round(e.retry_after)  # Get the remaining time in seconds
             minutes, seconds = divmod(remaining_time, 60)
@@ -239,8 +208,7 @@ class Economy(commands.Cog, name="Economy"):
     async def bag(self, ctx):
         await self.open_account(ctx.author)
         user = ctx.author
-        users = await self.get_bank_data()
-        bag = users.get(str(user.id), {}).get("bag", [])
+        bag = await db_helpers.get_user_bag(user)
         em = discord.Embed(title="Bag")
         for item in bag:
             name = item["item"]
