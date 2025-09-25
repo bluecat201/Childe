@@ -27,7 +27,7 @@ class DatabaseHelpers:
     @staticmethod
     async def get_bank_data() -> Dict[str, Any]:
         """Get all economy data (replacement for mainbank.json)"""
-        if not DATABASE_AVAILABLE or not db.connection:
+        if not DATABASE_AVAILABLE or not db.connection or not db.connection.is_connected():
             return {}
         cursor = db.connection.cursor(dictionary=True)
         try:
@@ -50,7 +50,7 @@ class DatabaseHelpers:
     @staticmethod
     async def open_account(user) -> bool:
         """Create new economy account for user"""
-        if not DATABASE_AVAILABLE or not db.connection:
+        if not DATABASE_AVAILABLE or not db.connection or not db.connection.is_connected():
             return False
         cursor = db.connection.cursor()
         try:
@@ -65,7 +65,7 @@ class DatabaseHelpers:
     @staticmethod
     async def update_bank(user, change: int = 0, mode: str = "wallet") -> List[int]:
         """Update user's bank balance"""
-        if not DATABASE_AVAILABLE or not db.connection:
+        if not DATABASE_AVAILABLE or not db.connection or not db.connection.is_connected():
             return [0, 0]
         cursor = db.connection.cursor()
         try:
@@ -87,7 +87,7 @@ class DatabaseHelpers:
     @staticmethod
     async def get_user_balance(user) -> Tuple[int, int]:
         """Get user's wallet and bank balance"""
-        if not DATABASE_AVAILABLE or not db.connection:
+        if not DATABASE_AVAILABLE or not db.connection or not db.connection.is_connected():
             return (0, 0)
         cursor = db.connection.cursor()
         try:
@@ -137,7 +137,7 @@ class DatabaseHelpers:
     @staticmethod
     async def get_user_bag(user) -> List[Dict[str, Any]]:
         """Get user's bag contents"""
-        if not DATABASE_AVAILABLE or not db.connection:
+        if not DATABASE_AVAILABLE or not db.connection or not db.connection.is_connected():
             return []
         cursor = db.connection.cursor()
         try:
@@ -255,6 +255,8 @@ class DatabaseHelpers:
     @staticmethod
     async def update_server_setting(guild_id: int, key: str, value: Any):
         """Update a specific server setting"""
+        if not DATABASE_AVAILABLE or not db.connection or not db.connection.is_connected():
+            return
         cursor = db.connection.cursor()
         try:
             # Get current settings
@@ -280,6 +282,27 @@ class DatabaseHelpers:
                     VALUES (%s, '*', %s)
                     ON DUPLICATE KEY UPDATE settings = VALUES(settings)
                 """, (guild_id, json.dumps(settings)))
+        finally:
+            cursor.close()
+    
+    @staticmethod
+    async def get_server_setting(guild_id: str, key: str) -> Any:
+        """Get a specific server setting"""
+        if not DATABASE_AVAILABLE or not db.connection or not db.connection.is_connected():
+            return None
+        cursor = db.connection.cursor()
+        try:
+            if key == "prefix":
+                cursor.execute("SELECT prefix FROM server_settings WHERE guild_id = %s", (guild_id,))
+                result = cursor.fetchone()
+                return result[0] if result else None
+            else:
+                cursor.execute("SELECT settings FROM server_settings WHERE guild_id = %s", (guild_id,))
+                result = cursor.fetchone()
+                if result and result[0]:
+                    settings = json.loads(result[0])
+                    return settings.get(key)
+                return None
         finally:
             cursor.close()
     

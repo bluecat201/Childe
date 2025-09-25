@@ -16,6 +16,7 @@ from datetime import datetime
 from perplexity_api import ChatSession
 from config import config
 from db_helpers import db_helpers
+from database import db
 DEFAULT_PREFIX = config.get("bot.default_prefix", "*")
 PREFIX_FILE = "prefixes.json"
 WARNINGS_FILE = "warnings.json"
@@ -292,14 +293,51 @@ async def change_prefix(ctx, prefix: str):
         return
     
     # Save prefix to database
-    await db_helpers.set_server_setting(str(ctx.guild.id), "prefix", prefix)
+    await db_helpers.update_server_setting(str(ctx.guild.id), "prefix", prefix)
     await ctx.send(f"Prefix changed to: `{prefix}`")
+
+@bot.command(name="dbstatus")
+@commands.is_owner()
+async def database_status(ctx):
+    """Check database connection status"""
+    try:
+        from db_helpers import DATABASE_AVAILABLE
+        
+        embed = discord.Embed(title="Database Status", color=discord.Color.blue())
+        embed.add_field(name="MySQL Available", value="✅ Yes" if DATABASE_AVAILABLE else "❌ No", inline=False)
+        
+        if DATABASE_AVAILABLE:
+            connection_status = "✅ Connected" if (db.connection and db.connection.is_connected()) else "❌ Disconnected"
+            embed.add_field(name="Connection Status", value=connection_status, inline=False)
+            
+            if db.connection and db.connection.is_connected():
+                # Test a simple query
+                try:
+                    wallet, bank = await db_helpers.get_user_balance(ctx.author)
+                    embed.add_field(name="Test Query", value=f"✅ Success (Your balance: {wallet}/{bank})", inline=False)
+                except Exception as e:
+                    embed.add_field(name="Test Query", value=f"❌ Failed: {e}", inline=False)
+            
+        await ctx.send(embed=embed)
+    except Exception as e:
+        await ctx.send(f"Error checking database status: {e}")
 
 # --- LOGGING EVENTS ---
 @bot.event
 async def on_ready():
     print(f'Connected to bot: {bot.user.name}')
     print(f'Bot ID: {bot.user.id}')
+    
+    # Initialize database connection
+    print("Connecting to database...")
+    try:
+        await db.connect()
+        await db.create_tables()
+        print("✅ Database connected and tables created successfully!")
+    except Exception as e:
+        print(f"❌ Database connection failed: {e}")
+        print("Bot will continue with limited functionality.")
+    
     await bot.change_presence(activity=discord.Streaming(name=f'{CURRENT_VERSION}', url='https://www.twitch.tv/bluecatlive'))
     channel_id = STARTUP_CHANNEL_ID
     channel = bot.get_channel(channel_id)
