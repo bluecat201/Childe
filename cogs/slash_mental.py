@@ -1,79 +1,22 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
-import json
-import os
 from datetime import datetime
+from db_helpers import DatabaseHelpers
 
-# Data files - keep these separate as they contain actual user data
-SERVER_MOOD_FILE = "server_mood_data.json"
-USER_MOOD_FILE = "user_mood_data.json"
-MOOD_DATES_FILE = "mood_dates.json"
-
-# Centralized settings file
-SETTINGS_FILE = "server_settings.json"
-
-# Load mood data files
-if os.path.exists(SERVER_MOOD_FILE):
-    with open(SERVER_MOOD_FILE, "r") as f:
-        server_mood_data = json.load(f)
-else:
-    server_mood_data = {}
-
-if os.path.exists(USER_MOOD_FILE):
-    with open(USER_MOOD_FILE, "r") as f:
-        user_mood_data = json.load(f)
-else:
-    user_mood_data = {}
-
-if os.path.exists(MOOD_DATES_FILE):
-    with open(MOOD_DATES_FILE, "r") as f:
-        mood_dates_data = json.load(f)
-else:
-    mood_dates_data = {}
-
-# Load settings
-if os.path.exists(SETTINGS_FILE):
-    with open(SETTINGS_FILE, "r") as f:
-        settings_data = json.load(f)
-else:
-    settings_data = {
-        "guilds": {},
-        "global": {
-            "mental_health": {
-                "channels": [],
-                "ping_roles": [],
-                "frequency": 24,
-                "check_enabled": False
-            }
-        }
-    }
-
-# Helper function to get mental health settings
-def get_mental_health_settings():
-    if "global" not in settings_data:
-        settings_data["global"] = {}
-    
-    if "mental_health" not in settings_data["global"]:
-        settings_data["global"]["mental_health"] = {
-            "channels": [],
-            "ping_roles": [],
-            "frequency": 24,
-            "check_enabled": False
-        }
-        
-    return settings_data["global"]["mental_health"]
+# Now using database for all mental health data
 
 class Slash_Mental(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.db_helpers = DatabaseHelpers()
         
-        # Get settings from centralized file
-        mental_health_settings = get_mental_health_settings()
-        self.check_enabled = mental_health_settings.get("check_enabled", False)
-        self.channel_ids = mental_health_settings.get("channels", [])
-        self.ping_roles = mental_health_settings.get("ping_roles", [])
-        self.frequency = mental_health_settings.get("frequency", 24)
+        # Get settings from database
+        mental_health_config = self.db_helpers.get_mental_health_config()
+        self.check_enabled = mental_health_config.get("check_enabled", False)
+        self.channel_ids = mental_health_config.get("channels", [])
+        self.ping_roles = mental_health_config.get("ping_roles", [])
+        self.frequency = mental_health_config.get("frequency", 24)
 
     def is_admin(self, interaction: discord.Interaction):
         return interaction.user.guild_permissions.administrator

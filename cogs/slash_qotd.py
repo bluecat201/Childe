@@ -1,65 +1,38 @@
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands
-import json
 from datetime import datetime, timedelta
 import asyncio
-import os
-import aiofiles
-import random  # Add this import for random selection
-
-QOTD_FILE = "qotd.json"
-
-# Načtení/uložení QOTD dat
-async def load_qotd_data():
-    if not os.path.exists(QOTD_FILE):
-        default_data = {"guilds": {}}
-        await save_qotd_data(default_data)  # Vytvoří soubor s výchozími daty, pokud neexistuje
-        return default_data
-
-    async with aiofiles.open(QOTD_FILE, mode="r") as f:
-        data = await f.read()
-        return json.loads(data) if data else {"guilds": {}}  # Ošetření prázdného souboru
-
-
-async def save_qotd_data(data):
-    async with aiofiles.open(QOTD_FILE, mode="w") as f:
-        await f.write(json.dumps(data, indent=4))
+import random
+from db_helpers import DatabaseHelpers
 
 class QOTD_slash(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.db_helpers = DatabaseHelpers()
         # self.qotd_task.start()
-
-    async def cog_load(self):
-        self.qotd_data = await load_qotd_data()  # Načtení existujících dat při spuštění
 
     # def cog_unload(self):
     #     self.qotd_task.cancel()
 
     async def send_questions_to_all_guilds(self):
-        for guild_id, data in self.qotd_data["guilds"].items():
-            channel_id = data.get("channel_id")
-            questions = data.get("questions", [])
-
+        guilds_with_qotd = self.db_helpers.get_all_qotd_guilds()
+        
+        for guild_id, channel_id, ping in guilds_with_qotd:
+            questions = self.db_helpers.get_qotd_questions(guild_id)
+            
             if not channel_id or not questions:
                 continue
 
-            # Convert channel_id to integer if it's a string
-            if isinstance(channel_id, str):
-                channel_id = int(channel_id)
-                
             channel = self.bot.get_channel(channel_id)
             if not channel:
                 continue
 
-            question = questions.pop(0)
-            ping = data.get("ping")
-            await channel.send(f"{ping or ''} **Question of the Day:** {question}")
-
-        await save_qotd_data(self.qotd_data)
-
-    # @qotd_task.before_loop
+            # Get the first question and remove it
+            question = questions[0]
+            self.db_helpers.remove_qotd_question(guild_id, question)
+            
+            await channel.send(f"{ping or ''} **Question of the Day:** {question}")    # @qotd_task.before_loop
     # async def before_qotd_task(self):
     #     await self.bot.wait_until_ready()
     #     if not self.qotd_data:
@@ -68,38 +41,34 @@ class QOTD_slash(commands.Cog):
     # Slash příkaz: Přidání otázky
     @app_commands.command(name="addquestion", description="Adds question to the list.")
     async def add_question(self, interaction: discord.Interaction, question: str):
-        guild_id = str(interaction.guild.id)
-        if guild_id not in self.qotd_data["guilds"]:
-            self.qotd_data["guilds"][guild_id] = {"questions": [], "channel_id": None, "ping": None}
+        guild_id = interaction.guild.id
 
-        self.qotd_data["guilds"][guild_id]["questions"].append(question)
-        await save_qotd_data(self.qotd_data)
+        self.db_helpers.add_qotd_question(guild_id, question)
         await interaction.response.send_message(f"Added question: {question}", ephemeral=True)
 
     # Slash příkaz: Manuální odeslání otázky
     @app_commands.command(name="sendqotd", description="Sends the question of the day.")
     @app_commands.checks.has_permissions(manage_guild=True)
     async def send_qotd(self, interaction: discord.Interaction):
-        guild_id = str(interaction.guild.id)
-        guild_data = self.qotd_data["guilds"].get(guild_id, {})
-        channel_id = guild_data.get("channel_id")
-        questions = guild_data.get("questions", [])
+        guild_id = interaction.guild.id
+        
+        qotd_settings = self.db_helpers.get_qotd_settings(guild_id)
+        questions = self.db_helpers.get_qotd_questions(guild_id)
 
-        if not channel_id or not questions:
+        if not qotd_settings or not qotd_settings.get('channel_id') or not questions:
             await interaction.response.send_message("No channel, or no questions have been set!", ephemeral=True)
             return
 
-        # Convert to int if it's a string
-        if isinstance(channel_id, str):
-            channel_id = int(channel_id)
-            
+        channel_id = qotd_settings['channel_id']
         channel = self.bot.get_channel(channel_id)
         if not channel:
             await interaction.response.send_message("This channel doesn't exist!", ephemeral=True)
             return
 
-        question = questions.pop(0)
-        ping = guild_data.get("ping")
+        # Get first question and remove it
+        question = questions[0]
+        self.db_helpers.remove_qotd_question(guild_id, question)
+        ping = qotd_settings.get('ping')
 
         # Create embed
         embed = discord.Embed(
@@ -109,41 +78,34 @@ class QOTD_slash(commands.Cog):
             timestamp=datetime.now()
         )
         
+        embed = discord.Embed(title="Question of the Day", description=question, color=0x3498db)
         # Send message with ping outside embed if exists
         await channel.send(content=ping or '', embed=embed)
-        await save_qotd_data(self.qotd_data)
         await interaction.response.send_message("The QOTD has been sent!", ephemeral=True)
 
     # Slash příkaz: Nastavení místnosti
     @app_commands.command(name="setqotdchannel", description="Sets the room for QOTD.")
     @app_commands.checks.has_permissions(manage_guild=True)
     async def set_qotd_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
-        guild_id = str(interaction.guild.id)
-        if guild_id not in self.qotd_data["guilds"]:
-            self.qotd_data["guilds"][guild_id] = {"questions": [], "channel_id": None, "ping": None}
+        guild_id = interaction.guild.id
 
-        self.qotd_data["guilds"][guild_id]["channel_id"] = channel.id
-        await save_qotd_data(self.qotd_data)
+        self.db_helpers.set_qotd_channel(guild_id, channel.id)
         await interaction.response.send_message(f"QOTD channel set to: {channel.mention}", ephemeral=True)
 
     # Slash příkaz: Nastavení pingu
     @app_commands.command(name="setqotdping", description="Sets the ping for QOTD.")
     @app_commands.checks.has_permissions(manage_guild=True)
     async def set_qotd_ping(self, interaction: discord.Interaction, ping: str = None):
-        guild_id = str(interaction.guild.id)
-        if guild_id not in self.qotd_data["guilds"]:
-            self.qotd_data["guilds"][guild_id] = {"questions": [], "channel_id": None, "ping": None}
+        guild_id = interaction.guild.id
 
-        self.qotd_data["guilds"][guild_id]["ping"] = ping
-        await save_qotd_data(self.qotd_data)
+        self.db_helpers.set_qotd_ping(guild_id, ping)
         await interaction.response.send_message(f"Ping for QOTD was set to: {ping}", ephemeral=True)
 
     @app_commands.command(name="listquestions", description="Lists all questions for this server.")
     @app_commands.checks.has_permissions(manage_guild=True)
     async def list_questions(self, interaction: discord.Interaction):
-        guild_id = str(interaction.guild.id)
-        guild_data = self.qotd_data["guilds"].get(guild_id, {})
-        questions = guild_data.get("questions", [])
+        guild_id = interaction.guild.id
+        questions = self.db_helpers.get_qotd_questions(guild_id)
 
         if not questions:
             await interaction.response.send_message("No questions in the database!", ephemeral=True)
