@@ -1,7 +1,18 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from db_helpers import DatabaseHelpers
+f            embed.add_field(
+                name="📊 Server Info",
+                value=server_info,
+                inline=False
+            )
+            
+            # Prompt and Response
+            embed.add_field(
+                name="❓ User Prompt",
+                value=f"```{self.clean_prompt(history['prompt'])[:1000]}{'...' if len(self.clean_prompt(history['prompt'])) > 1000 else ''}```",
+                inline=False
+            )rs import DatabaseHelpers
 from datetime import datetime
 from config import config
 
@@ -17,6 +28,14 @@ class SlashAIManagement(commands.Cog):
     def is_owner_or_co_owner(self, user_id: int) -> bool:
         """Check if user is owner or co-owner"""
         return user_id == self.owner_id or user_id == self.co_owner_id
+
+    def clean_prompt(self, prompt: str) -> str:
+        """Clean up bot mentions in prompt for better display"""
+        # Replace the specific bot mention with @Childe
+        cleaned = prompt.replace("<@883325865474269192>", "@Childe")
+        # Also handle the alternate mention format
+        cleaned = cleaned.replace("<@!883325865474269192>", "@Childe")
+        return cleaned
 
     ai = app_commands.Group(name="ai", description="AI management commands (Owner only)")
 
@@ -142,7 +161,7 @@ class SlashAIManagement(commands.Cog):
             # Prompt and Response
             embed.add_field(
                 name="❓ User Prompt",
-                value=f"```{history['prompt'][:1000]}{'...' if len(history['prompt']) > 1000 else ''}```",
+                value=f"```{self.clean_prompt(history['prompt'])[:1000]}{'...' if len(self.clean_prompt(history['prompt'])) > 1000 else ''}```",
                 inline=False
             )
             
@@ -239,7 +258,7 @@ class SlashAIManagement(commands.Cog):
         # Prompt and Response
         embed.add_field(
             name="❓ User Prompt",
-            value=f"```{history['prompt'][:1000]}{'...' if len(history['prompt']) > 1000 else ''}```",
+            value=f"```{self.clean_prompt(history['prompt'])[:1000]}{'...' if len(self.clean_prompt(history['prompt'])) > 1000 else ''}```",
             inline=False
         )
         
@@ -338,7 +357,7 @@ class SlashAIManagement(commands.Cog):
         # Prompt and Response
         embed.add_field(
             name="❓ User Prompt",
-            value=f"```{history['prompt'][:1000]}{'...' if len(history['prompt']) > 1000 else ''}```",
+            value=f"```{self.clean_prompt(history['prompt'])[:1000]}{'...' if len(self.clean_prompt(history['prompt'])) > 1000 else ''}```",
             inline=False
         )
         
@@ -400,7 +419,7 @@ class SlashAIManagement(commands.Cog):
         # Prompt and Response
         embed.add_field(
             name="❓ User Prompt",
-            value=f"```{history['prompt'][:1000]}{'...' if len(history['prompt']) > 1000 else ''}```",
+            value=f"```{self.clean_prompt(history['prompt'])[:1000]}{'...' if len(self.clean_prompt(history['prompt'])) > 1000 else ''}```",
             inline=False
         )
         

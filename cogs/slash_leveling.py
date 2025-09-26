@@ -4,7 +4,7 @@ from discord.ext import commands
 import random
 import json
 import os
-from db_helpers import db_helpers
+from db_helpers import DatabaseHelpers
 
 # Now using database instead of JSON files
 
