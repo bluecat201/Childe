@@ -176,8 +176,13 @@ class DatabaseHelpers:
             cursor.close()
     
     @staticmethod
-    async def update_user_xp(guild_id: int, user_id: int, xp_gain: int, message_count: int = 1):
+    @staticmethod
+    def update_user_xp(guild_id: int, user_id: int, xp_gain: int, message_count: int = 1):
         """Update user's XP and level"""
+        if not DATABASE_AVAILABLE or not db.connection or not db.connection.is_connected():
+            print(f"Database not available for XP update: user {user_id} in guild {guild_id}")
+            return False
+            
         cursor = db.connection.cursor()
         try:
             # Get current stats
@@ -214,6 +219,9 @@ class DatabaseHelpers:
                     VALUES (%s, %s, %s, 1, %s, %s)
                 """, (guild_id, user_id, xp_gain, message_count, xp_gain))
                 return False
+        except Exception as e:
+            print(f"Error updating user XP: {e}")
+            return False
         finally:
             cursor.close()
     
@@ -455,6 +463,327 @@ class DatabaseHelpers:
                 VALUES (%s, {placeholders})
                 ON DUPLICATE KEY UPDATE {', '.join([f'{k} = VALUES({k})' for k in data.keys()])}
             """, [key_value] + values)
+        finally:
+            cursor.close()
+    
+    # LEVELING SYSTEM HELPERS
+    @staticmethod
+    def get_leveling_settings(guild_id: int) -> Dict[str, Any]:
+        """Get leveling settings for a guild"""
+        if not DATABASE_AVAILABLE or not db.connection or not db.connection.is_connected():
+            return {'enabled': True}
+            
+        cursor = db.connection.cursor()
+        try:
+            cursor.execute("SELECT enabled FROM leveling_enabled WHERE guild_id = %s", (guild_id,))
+            result = cursor.fetchone()
+            return {'enabled': result[0] if result else True}
+        except Exception as e:
+            print(f"Error getting leveling settings: {e}")
+            return {'enabled': True}
+        finally:
+            cursor.close()
+    
+    @staticmethod
+    def get_ignored_channels(guild_id: int) -> List[str]:
+        """Get list of ignored channels for a guild"""
+        if not DATABASE_AVAILABLE or not db.connection or not db.connection.is_connected():
+            return []
+            
+        cursor = db.connection.cursor()
+        try:
+            cursor.execute("SELECT channel_id FROM ignored_channels WHERE guild_id = %s", (guild_id,))
+            results = cursor.fetchall()
+            return [str(row[0]) for row in results]
+        except Exception as e:
+            print(f"Error getting ignored channels: {e}")
+            return []
+        finally:
+            cursor.close()
+    
+    @staticmethod
+    def get_level_up_channel(guild_id: int) -> Optional[int]:
+        """Get level up channel ID for a guild"""
+        if not DATABASE_AVAILABLE or not db.connection or not db.connection.is_connected():
+            return None
+            
+        cursor = db.connection.cursor()
+        try:
+            cursor.execute("SELECT channel_id FROM level_up_channels WHERE guild_id = %s", (guild_id,))
+            result = cursor.fetchone()
+            return result[0] if result else None
+        except Exception as e:
+            print(f"Error getting level up channel: {e}")
+            return None
+        finally:
+            cursor.close()
+    
+    @staticmethod
+    def get_user_preference(user_id: int, preference_key: str, default_value: Any = None) -> Any:
+        """Get user preference value"""
+        if not DATABASE_AVAILABLE or not db.connection or not db.connection.is_connected():
+            return default_value
+            
+        cursor = db.connection.cursor()
+        try:
+            cursor.execute("SELECT preferences FROM mention_prefs WHERE user_id = %s", (user_id,))
+            result = cursor.fetchone()
+            if result and result[0]:
+                import json
+                prefs = json.loads(result[0])
+                return prefs.get(preference_key, default_value)
+            return default_value
+        except Exception as e:
+            print(f"Error getting user preference: {e}")
+            return default_value
+        finally:
+            cursor.close()
+    
+    @staticmethod
+    def set_user_preference(user_id: int, preference_key: str, value: Any) -> bool:
+        """Set user preference value"""
+        if not DATABASE_AVAILABLE or not db.connection or not db.connection.is_connected():
+            return False
+            
+        cursor = db.connection.cursor()
+        try:
+            # Get existing preferences
+            cursor.execute("SELECT preferences FROM mention_prefs WHERE user_id = %s", (user_id,))
+            result = cursor.fetchone()
+            
+            import json
+            if result and result[0]:
+                prefs = json.loads(result[0])
+            else:
+                prefs = {}
+            
+            prefs[preference_key] = value
+            prefs_json = json.dumps(prefs)
+            
+            # Insert or update
+            cursor.execute("""
+                INSERT INTO mention_prefs (user_id, preferences) 
+                VALUES (%s, %s)
+                ON DUPLICATE KEY UPDATE preferences = VALUES(preferences)
+            """, (user_id, prefs_json))
+            
+            return True
+        except Exception as e:
+            print(f"Error setting user preference: {e}")
+            return False
+        finally:
+            cursor.close()
+    
+    @staticmethod
+    def update_leveling_settings(guild_id: int, enabled: bool) -> bool:
+        """Update leveling settings for a guild"""
+        if not DATABASE_AVAILABLE or not db.connection or not db.connection.is_connected():
+            return False
+            
+        cursor = db.connection.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO leveling_enabled (guild_id, enabled) 
+                VALUES (%s, %s)
+                ON DUPLICATE KEY UPDATE enabled = VALUES(enabled)
+            """, (guild_id, enabled))
+            return True
+        except Exception as e:
+            print(f"Error updating leveling settings: {e}")
+            return False
+        finally:
+            cursor.close()
+    
+    @staticmethod
+    def add_ignored_channel(guild_id: int, channel_id: int) -> bool:
+        """Add a channel to the ignored list"""
+        if not DATABASE_AVAILABLE or not db.connection or not db.connection.is_connected():
+            return False
+            
+        cursor = db.connection.cursor()
+        try:
+            cursor.execute("""
+                INSERT IGNORE INTO ignored_channels (guild_id, channel_id) 
+                VALUES (%s, %s)
+            """, (guild_id, channel_id))
+            return cursor.rowcount > 0
+        except Exception as e:
+            print(f"Error adding ignored channel: {e}")
+            return False
+        finally:
+            cursor.close()
+    
+    @staticmethod
+    def remove_ignored_channel(guild_id: int, channel_id: int) -> bool:
+        """Remove a channel from the ignored list"""
+        if not DATABASE_AVAILABLE or not db.connection or not db.connection.is_connected():
+            return False
+            
+        cursor = db.connection.cursor()
+        try:
+            cursor.execute("""
+                DELETE FROM ignored_channels 
+                WHERE guild_id = %s AND channel_id = %s
+            """, (guild_id, channel_id))
+            return cursor.rowcount > 0
+        except Exception as e:
+            print(f"Error removing ignored channel: {e}")
+            return False
+        finally:
+            cursor.close()
+    
+    @staticmethod
+    def set_level_up_channel(guild_id: int, channel_id: Optional[int]) -> bool:
+        """Set level up channel for a guild"""
+        if not DATABASE_AVAILABLE or not db.connection or not db.connection.is_connected():
+            return False
+            
+        cursor = db.connection.cursor()
+        try:
+            if channel_id is None:
+                # Remove level up channel
+                cursor.execute("DELETE FROM level_up_channels WHERE guild_id = %s", (guild_id,))
+            else:
+                # Set level up channel
+                cursor.execute("""
+                    INSERT INTO level_up_channels (guild_id, channel_id) 
+                    VALUES (%s, %s)
+                    ON DUPLICATE KEY UPDATE channel_id = VALUES(channel_id)
+                """, (guild_id, channel_id))
+            return True
+        except Exception as e:
+            print(f"Error setting level up channel: {e}")
+            return False
+        finally:
+            cursor.close()
+    
+    @staticmethod
+    def get_leaderboard(guild_id: int, limit: int = 10) -> List[Tuple[int, int, int, int]]:
+        """Get guild leaderboard (user_id, level, total_xp, messages)"""
+        if not DATABASE_AVAILABLE or not db.connection or not db.connection.is_connected():
+            return []
+            
+        cursor = db.connection.cursor()
+        try:
+            cursor.execute("""
+                SELECT user_id, level, total_xp, messages 
+                FROM leveling 
+                WHERE guild_id = %s 
+                ORDER BY total_xp DESC 
+                LIMIT %s
+            """, (guild_id, limit))
+            return cursor.fetchall()
+        except Exception as e:
+            print(f"Error getting leaderboard: {e}")
+            return []
+        finally:
+            cursor.close()
+    
+    @staticmethod
+    def get_user_level_data(user_id: int, guild_id: int) -> Optional[Tuple[int, int, int]]:
+        """Get user level data (level, total_xp, messages)"""
+        if not DATABASE_AVAILABLE or not db.connection or not db.connection.is_connected():
+            return None
+            
+        cursor = db.connection.cursor()
+        try:
+            cursor.execute("""
+                SELECT level, total_xp, messages 
+                FROM leveling 
+                WHERE guild_id = %s AND user_id = %s
+            """, (guild_id, user_id))
+            return cursor.fetchone()
+        except Exception as e:
+            print(f"Error getting user level data: {e}")
+            return None
+        finally:
+            cursor.close()
+    
+    # AI CHAT HISTORY HELPERS
+    @staticmethod
+    def save_ai_chat_interaction(session_id: str, user_id: int, username: str, 
+                                  user_display_name: str, guild_id: Optional[int], 
+                                  guild_name: Optional[str], channel_id: int, 
+                                  channel_name: str, message_id: Optional[int],
+                                  prompt: str, response: str) -> bool:
+        """Save AI chat interaction to database"""
+        if not DATABASE_AVAILABLE or not db.connection or not db.connection.is_connected():
+            print("Database not available for AI chat logging")
+            return False
+            
+        cursor = db.connection.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO ai_chat_history 
+                (session_id, user_id, username, user_display_name, guild_id, guild_name, 
+                 channel_id, channel_name, message_id, prompt, response)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (session_id, user_id, username, user_display_name, guild_id, guild_name,
+                  channel_id, channel_name, message_id, prompt, response))
+            return True
+        except Exception as e:
+            print(f"Error saving AI chat interaction: {e}")
+            return False
+        finally:
+            cursor.close()
+    
+    @staticmethod
+    def get_ai_chat_history_by_session(session_id: str) -> Optional[Dict[str, Any]]:
+        """Get AI chat history by session ID"""
+        if not DATABASE_AVAILABLE or not db.connection or not db.connection.is_connected():
+            return None
+            
+        cursor = db.connection.cursor(dictionary=True)
+        try:
+            cursor.execute("""
+                SELECT * FROM ai_chat_history 
+                WHERE session_id = %s 
+                ORDER BY timestamp DESC
+            """, (session_id,))
+            return cursor.fetchone()
+        except Exception as e:
+            print(f"Error fetching AI chat history by session: {e}")
+            return None
+        finally:
+            cursor.close()
+    
+    @staticmethod
+    def get_ai_chat_history_by_message_id(message_id: int) -> Optional[Dict[str, Any]]:
+        """Get AI chat history by Discord message ID"""
+        if not DATABASE_AVAILABLE or not db.connection or not db.connection.is_connected():
+            return None
+            
+        cursor = db.connection.cursor(dictionary=True)
+        try:
+            cursor.execute("""
+                SELECT * FROM ai_chat_history 
+                WHERE message_id = %s 
+                ORDER BY timestamp DESC
+            """, (message_id,))
+            return cursor.fetchone()
+        except Exception as e:
+            print(f"Error fetching AI chat history by message ID: {e}")
+            return None
+        finally:
+            cursor.close()
+    
+    @staticmethod
+    def get_all_ai_chat_history(limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+        """Get all AI chat history with pagination (owner/co-owner only)"""
+        if not DATABASE_AVAILABLE or not db.connection or not db.connection.is_connected():
+            return []
+            
+        cursor = db.connection.cursor(dictionary=True)
+        try:
+            cursor.execute("""
+                SELECT * FROM ai_chat_history 
+                ORDER BY timestamp DESC 
+                LIMIT %s OFFSET %s
+            """, (limit, offset))
+            return cursor.fetchall()
+        except Exception as e:
+            print(f"Error fetching all AI chat history: {e}")
+            return []
         finally:
             cursor.close()
 

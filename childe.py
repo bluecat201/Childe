@@ -233,7 +233,26 @@ async def on_message(message):
         random_chars = ''.join(random.choices('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', k=8))
         response_with_footer = f"{response}\n-# Generated on sidet.eu API v1.1 PREVIEW | #{random_chars}"
         
-        # Log the interaction
+        # Send reply and get message object
+        reply_message = await message.reply(response_with_footer)
+        
+        # Save to database with message ID
+        from db_helpers import db_helpers
+        db_helpers.save_ai_chat_interaction(
+            session_id=random_chars,
+            user_id=message.author.id,
+            username=str(message.author),
+            user_display_name=message.author.display_name,
+            guild_id=message.guild.id if message.guild else None,
+            guild_name=str(message.guild) if message.guild else "DM",
+            channel_id=message.channel.id,
+            channel_name=str(message.channel),
+            message_id=reply_message.id,
+            prompt=query,
+            response=response
+        )
+        
+        # Also log to file for backup
         await log_ai_interaction(
             user=message.author,
             guild=message.guild,
@@ -242,8 +261,6 @@ async def on_message(message):
             response=response,
             session_id=random_chars
         )
-        
-        await message.reply(response_with_footer)
     await bot.process_commands(message)
 
 @bot.command()

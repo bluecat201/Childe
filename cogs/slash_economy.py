@@ -137,8 +137,8 @@ class SlashEconomy(commands.Cog):
             await interaction.response.send_message("You don't have that much money", ephemeral=True)
             return
 
-        # Slot machine emojis
-        emojis = ["🍒", "🍋", "🍊", "🍇", "🔔", "💎", "7️⃣"]
+        # Slot machine emojis (reduced for better odds)
+        emojis = ["🍒", "🍋", "🍊", "💎"]
         
         # Create initial embed
         embed = discord.Embed(title="🎰 Slot Machine", color=0xFFD700)

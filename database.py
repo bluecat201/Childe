@@ -214,6 +214,30 @@ class DatabaseManager:
                 )
             """)
             
+            # AI Chat History table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS ai_chat_history (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    session_id VARCHAR(8) NOT NULL,
+                    user_id BIGINT NOT NULL,
+                    username VARCHAR(255),
+                    user_display_name VARCHAR(255),
+                    guild_id BIGINT,
+                    guild_name VARCHAR(255),
+                    channel_id BIGINT NOT NULL,
+                    channel_name VARCHAR(255),
+                    message_id BIGINT,
+                    prompt TEXT NOT NULL,
+                    response TEXT NOT NULL,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_session_id (session_id),
+                    INDEX idx_user_id (user_id),
+                    INDEX idx_guild_id (guild_id),
+                    INDEX idx_timestamp (timestamp),
+                    INDEX idx_message_id (message_id)
+                )
+            """)
+            
             # Migration status table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS migration_status (

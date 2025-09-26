@@ -15,38 +15,59 @@ async def get_guild_settings(guild_id):
 async def is_leveling_enabled(guild_id):
     """Check if leveling is enabled for a guild"""
     from database import db
+    if not db.connection or not db.connection.is_connected():
+        return True  # Default to enabled if database not available
+        
     cursor = db.connection.cursor()
     try:
         cursor.execute("SELECT enabled FROM leveling_enabled WHERE guild_id = %s", (guild_id,))
         result = cursor.fetchone()
         return result[0] if result else True  # Default to enabled
+    except Exception as e:
+        print(f"Error checking leveling enabled: {e}")
+        return True
     finally:
         cursor.close()
 
 async def is_channel_ignored(guild_id, channel_id):
     """Check if a channel is in the ignored list"""
     from database import db
+    if not db.connection or not db.connection.is_connected():
+        return False  # Default to not ignored if database not available
+        
     cursor = db.connection.cursor()
     try:
         cursor.execute("SELECT 1 FROM ignored_channels WHERE guild_id = %s AND channel_id = %s", (guild_id, channel_id))
         return cursor.fetchone() is not None
+    except Exception as e:
+        print(f"Error checking ignored channel: {e}")
+        return False
     finally:
         cursor.close()
 
 async def get_level_up_channel(guild_id):
     """Get the level up channel ID for a guild"""
     from database import db
+    if not db.connection or not db.connection.is_connected():
+        return None  # Default to no level up channel if database not available
+        
     cursor = db.connection.cursor()
     try:
         cursor.execute("SELECT channel_id FROM level_up_channels WHERE guild_id = %s", (guild_id,))
         result = cursor.fetchone()
         return result[0] if result else None
+    except Exception as e:
+        print(f"Error getting level up channel: {e}")
+        return None
     finally:
         cursor.close()
 
 async def get_mention_preference(user_id):
     """Get user's mention preference for level up messages"""
     from database import db
+    if not db.connection or not db.connection.is_connected():
+        return True  # Default to mentioning if database not available
+        
     cursor = db.connection.cursor()
     try:
         cursor.execute("SELECT preferences FROM mention_prefs WHERE user_id = %s", (user_id,))
@@ -56,6 +77,9 @@ async def get_mention_preference(user_id):
             prefs = json.loads(result[0]) if result[0] else {}
             return prefs.get("mention_on_levelup", True)
         return True  # Default to True
+    except Exception as e:
+        print(f"Error getting mention preference: {e}")
+        return True
     finally:
         cursor.close()
 
@@ -73,8 +97,8 @@ class Leveling(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    async def add_xp(self, user_id, guild_id, xp_to_add):
-        return await db_helpers.update_user_xp(guild_id, user_id, xp_to_add, 1)
+    def add_xp(self, user_id, guild_id, xp_to_add):
+        return db_helpers.update_user_xp(guild_id, user_id, xp_to_add, 1)
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -93,7 +117,7 @@ class Leveling(commands.Cog):
             return
 
         # Add XP and check level up
-        leveled_up = await self.add_xp(message.author.id, message.guild.id, random.randint(5, 10))
+        leveled_up = self.add_xp(message.author.id, message.guild.id, random.randint(5, 10))
 
         if leveled_up:
             # Get level up channel ID
@@ -108,13 +132,17 @@ class Leveling(commands.Cog):
 
                 # Get user's current level from database
                 from database import db
-                cursor = db.connection.cursor()
-                try:
-                    cursor.execute("SELECT level FROM leveling WHERE guild_id = %s AND user_id = %s", (guild_id, message.author.id))
-                    result = cursor.fetchone()
-                    current_level = result[0] if result else 1
-                finally:
-                    cursor.close()
+                current_level = 1  # Default level
+                if db.connection and db.connection.is_connected():
+                    cursor = db.connection.cursor()
+                    try:
+                        cursor.execute("SELECT level FROM leveling WHERE guild_id = %s AND user_id = %s", (guild_id, message.author.id))
+                        result = cursor.fetchone()
+                        current_level = result[0] if result else 1
+                    except Exception as e:
+                        print(f"Error getting current level: {e}")
+                    finally:
+                        cursor.close()
 
                 await channel_to_use.send(
                     f"Congratulation, {mention_text}! Reached level {current_level}!"

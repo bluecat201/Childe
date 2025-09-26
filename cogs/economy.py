@@ -172,8 +172,8 @@ class Economy(commands.Cog, name="Economy"):
             await ctx.send("The value cannot be negative")
             return
 
-        # Slot machine emojis
-        emojis = ["🍒", "🍋", "🍊", "🍇", "🔔", "💎", "7️⃣"]
+        # Slot machine emojis (reduced for better odds)
+        emojis = ["🍒", "🍋", "🍊", "💎"]
         
         # Create initial embed
         embed = discord.Embed(title="🎰 Slot Machine", color=0xFFD700)
