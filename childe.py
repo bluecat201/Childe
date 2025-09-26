@@ -32,7 +32,7 @@ def get_version():
     except Exception:
         return "Unknown Version"
 
-CURRENT_VERSION = "Beta 0.4.4"
+CURRENT_VERSION = "Beta 0.4.5"
 
 async def determine_prefix(bot, message):
     if not message.guild:

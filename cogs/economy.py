@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 import json
 import random
+import asyncio
 from discord.ext.commands import CommandOnCooldown
 from db_helpers import db_helpers
 
@@ -167,17 +168,49 @@ class Economy(commands.Cog, name="Economy"):
         if amount > bal[0]:
             await ctx.send("You don't have that much money")
             return
-        if amount < 0:
+        if amount <= 0:
             await ctx.send("The value cannot be negative")
             return
-        final = [random.choice(["X", "O", "Q"]) for _ in range(3)]
-        await ctx.send(str(final))
-        if final[0] == final[1] and final[1] == final[2]:
-            await self.update_bank(ctx.author, 3 * amount)
-            await ctx.send("You won")
+
+        # Slot machine emojis
+        emojis = ["🍒", "🍋", "🍊", "🍇", "🔔", "💎", "7️⃣"]
+        
+        # Create initial embed
+        embed = discord.Embed(title="🎰 Slot Machine", color=0xFFD700)
+        embed.add_field(name="Bet Amount", value=f"💰 {amount:,} coins", inline=False)
+        embed.add_field(name="Rolling...", value="🎰 | 🎰 | 🎰", inline=False)
+        embed.set_footer(text=f"Good luck, {ctx.author.display_name}!")
+        
+        message = await ctx.send(embed=embed)
+        
+        # Simulate rolling animation
+        for i in range(8):  # 8 rolls for animation
+            rolling_result = [random.choice(emojis) for _ in range(3)]
+            embed.set_field_at(1, name="Rolling...", value=f"{rolling_result[0]} | {rolling_result[1]} | {rolling_result[2]}", inline=False)
+            await message.edit(embed=embed)
+            await asyncio.sleep(0.5)
+        
+        # Final result
+        final = [random.choice(emojis) for _ in range(3)]
+        
+        # Check if won
+        if final[0] == final[1] == final[2]:
+            winnings = 3 * amount
+            await self.update_bank(ctx.author, winnings)
+            embed.color = 0x00FF00  # Green for win
+            embed.set_field_at(1, name="🎉 JACKPOT! 🎉", value=f"{final[0]} | {final[1]} | {final[2]}", inline=False)
+            embed.add_field(name="Result", value=f"🎊 You won **{winnings:,}** coins! (3x multiplier)", inline=False)
         else:
             await self.update_bank(ctx.author, -amount)
-            await ctx.send("You lose")
+            embed.color = 0xFF0000  # Red for loss
+            embed.set_field_at(1, name="💥 No Match", value=f"{final[0]} | {final[1]} | {final[2]}", inline=False)
+            embed.add_field(name="Result", value=f"😢 You lost **{amount:,}** coins. Better luck next time!", inline=False)
+        
+        # Show new balance
+        new_bal = await self.update_bank(ctx.author)
+        embed.add_field(name="New Balance", value=f"💰 {new_bal[0]:,} coins", inline=False)
+        
+        await message.edit(embed=embed)
 
     # Shop command
     @commands.command(aliases=['Shop'],help="See what you can buy in the store")
