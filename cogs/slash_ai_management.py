@@ -18,10 +18,9 @@ class SlashAIManagement(commands.Cog):
         """Check if user is owner or co-owner"""
         return user_id == self.owner_id or user_id == self.co_owner_id
 
-    # AI command group
-    ai_group = app_commands.Group(name="ai", description="AI management commands (Owner only)")
+    ai = app_commands.Group(name="ai", description="AI management commands (Owner only)")
 
-    @ai_group.command(name="history", description="View AI chat history")
+    @ai.command(name="history", description="View AI chat history")
     @app_commands.describe(
         action="Choose what to view",
         session_id="Session ID (for 'session' action)",
@@ -414,6 +413,15 @@ class SlashAIManagement(commands.Cog):
         embed.set_footer(text=f"Session ID: {history['session_id']} | Database ID: {history['id']}")
         
         await ctx.send(embed=embed)
+
+    # Simple test slash command to verify the cog is working
+    @app_commands.command(name="ai_test", description="Test if AI management cog is working (Owner only)")
+    async def ai_test(self, interaction: discord.Interaction):
+        if not self.is_owner_or_co_owner(interaction.user.id):
+            await interaction.response.send_message("❌ This command is restricted to bot owners only.", ephemeral=True)
+            return
+        
+        await interaction.response.send_message("✅ AI Management cog is working! The `/ai history` command should be available.", ephemeral=True)
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(SlashAIManagement(bot))

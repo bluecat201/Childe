@@ -271,6 +271,33 @@ async def reset(ctx):
     await ctx.send("Bot is reseting...")
     await bot.close()
 
+@bot.command()
+async def sync(ctx):
+    """Manually sync slash commands (Owner only)"""
+    if ctx.author.id != YOUR_USER_ID and ctx.author.id != CO_OWNER_USER_ID:
+        await ctx.send("This command can only be used by the owner or co-owner of the bot.")
+        return
+    
+    await ctx.send("🔄 Syncing slash commands...")
+    
+    try:
+        # Sync globally
+        synced_global = await bot.tree.sync()
+        print(f"Synced {len(synced_global)} commands globally")
+        
+        # Sync to current guild for immediate availability
+        if ctx.guild:
+            synced_guild = await bot.tree.sync(guild=discord.Object(id=ctx.guild.id))
+            print(f"Synced {len(synced_guild)} commands to guild {ctx.guild.name}")
+            
+            await ctx.send(f"✅ Successfully synced {len(synced_global)} global commands and {len(synced_guild)} guild commands!")
+        else:
+            await ctx.send(f"✅ Successfully synced {len(synced_global)} global commands!")
+            
+    except Exception as e:
+        await ctx.send(f"❌ Error syncing commands: {e}")
+        print(f"Error syncing commands: {e}")
+
 @bot.command(aliases=['State', 'STATUS', 'status'])
 async def state(ctx):
     if ctx.author.id != YOUR_USER_ID and ctx.author.id != CO_OWNER_USER_ID:
