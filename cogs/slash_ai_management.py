@@ -1,18 +1,7 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-f            embed.add_field(
-                name="📊 Server Info",
-                value=server_info,
-                inline=False
-            )
-            
-            # Prompt and Response
-            embed.add_field(
-                name="❓ User Prompt",
-                value=f"```{self.clean_prompt(history['prompt'])[:1000]}{'...' if len(self.clean_prompt(history['prompt'])) > 1000 else ''}```",
-                inline=False
-            )rs import DatabaseHelpers
+from db_helpers import DatabaseHelpers
 from datetime import datetime
 from config import config
 
