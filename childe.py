@@ -227,8 +227,40 @@ async def on_message(message):
 
     if bot.user.mentioned_in(message):
         query = message.content.replace(f"<@!{bot.user.id}>", "").strip()
+        
+        # Handle mentions in different formats
+        query = query.replace(f"<@{bot.user.id}>", "").strip()
+        
         async with message.channel.typing():
-            response = await chat_session.send_message(query)
+            # Try up to 2 times to get a response
+            response = None
+            max_attempts = 2
+            
+            for attempt in range(max_attempts):
+                try:
+                    response = await chat_session.send_message(query)
+                    if response:  # If we got a valid response, break out of retry loop
+                        break
+                except Exception as e:
+                    error_msg = str(e).lower()
+                    print(f"AI attempt {attempt + 1} failed: {e}")
+                    
+                    # Check for specific Perplexity errors
+                    if "choices" in error_msg or "parsing" in error_msg:
+                        print(f"Detected Perplexity parsing error, attempt {attempt + 1}/{max_attempts}")
+                        if attempt < max_attempts - 1:  # Not the last attempt
+                            await asyncio.sleep(1)  # Wait 1 second before retry
+                            continue
+                    
+                    # If this is the last attempt or other error, break
+                    if attempt == max_attempts - 1:
+                        break
+            
+            # If no response after all attempts, use fallback
+            if not response:
+                response = "Mám krámy."
+                print("AI failed after all attempts, using fallback message")
+        
         # Generate random 8 characters
         random_chars = ''.join(random.choices('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', k=8))
         response_with_footer = f"{response}\n-# Generated on sidet.eu API v1.1 PREVIEW | #{random_chars}"

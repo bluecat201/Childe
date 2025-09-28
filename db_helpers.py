@@ -27,13 +27,27 @@ class DatabaseHelpers:
     """Helper functions for database operations used by cogs"""
     
     @staticmethod
-    async def is_channel_ignored(guild_id: int, channel_id: int) -> bool:
-        """Check if channel is ignored for leveling"""
-        if not await DatabaseHelpers.ensure_connection():    # ECONOMY HELPERS
+    async def ensure_connection():
+        """Ensure database connection is available, attempt to reconnect if needed"""
+        if not DATABASE_AVAILABLE:
+            return False
+            
+        if not db.connection or not db.connection.is_connected():
+            print("Database connection lost, attempting to reconnect...")
+            try:
+                await db.connect()
+                print("✅ Database reconnected successfully!")
+                return True
+            except Exception as e:
+                print(f"❌ Database reconnection failed: {e}")
+                return False
+        return True
+    
+    # ECONOMY HELPERS
     @staticmethod
     async def get_bank_data() -> Dict[str, Any]:
         """Get all economy data (replacement for mainbank.json)"""
-        if not DATABASE_AVAILABLE or not db.connection or not db.connection.is_connected():
+        if not await DatabaseHelpers.ensure_connection():
             return {}
         cursor = db.connection.cursor(dictionary=True)
         try:
