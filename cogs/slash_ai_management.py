@@ -51,7 +51,9 @@ class SlashAIManagement(commands.Cog):
                 await interaction.response.send_message("❌ Please provide a session ID for session lookup.", ephemeral=True)
                 return
                 
-            history = self.db_helpers.get_ai_chat_history_by_session(session_id)
+            try:
+            history = await self.db_helpers.get_ai_chat_history_by_session(session_id)
+        except Exception as e:
             
             if not history:
                 await interaction.response.send_message(f"❌ No AI chat history found for session ID: `{session_id}`", ephemeral=True)
@@ -114,7 +116,7 @@ class SlashAIManagement(commands.Cog):
                 await interaction.response.send_message("❌ Invalid message ID format. Please provide a valid Discord message ID.", ephemeral=True)
                 return
 
-            history = self.db_helpers.get_ai_chat_history_by_message_id(message_id_int)
+            history = await self.db_helpers.get_ai_chat_history_by_message_id(message_id_int)
             
             if not history:
                 await interaction.response.send_message(f"❌ No AI chat history found for message ID: `{message_id}`", ephemeral=True)
@@ -170,7 +172,7 @@ class SlashAIManagement(commands.Cog):
             elif limit < 1:
                 limit = 1
 
-            history_list = self.db_helpers.get_all_ai_chat_history(limit=limit)
+            history_list = await self.db_helpers.get_recent_ai_chat_history(limit=limit)
             
             if not history_list:
                 await interaction.response.send_message("❌ No AI chat history found in database.", ephemeral=True)
@@ -211,7 +213,7 @@ class SlashAIManagement(commands.Cog):
             await interaction.response.send_message("❌ Invalid message ID format. Please provide a valid Discord message ID.", ephemeral=True)
             return
 
-        history = self.db_helpers.get_ai_chat_history_by_message_id(message_id_int)
+        history = await self.db_helpers.get_ai_chat_history_by_message_id(message_id_int)
         
         if not history:
             await interaction.response.send_message(f"❌ No AI chat history found for message ID: `{message_id}`", ephemeral=True)
@@ -308,7 +310,7 @@ class SlashAIManagement(commands.Cog):
             await ctx.send("❌ This command is restricted to bot owners only.")
             return
 
-        history = self.db_helpers.get_ai_chat_history_by_session(session_id)
+        history = await self.db_helpers.get_ai_chat_history_by_session(session_id)
         
         if not history:
             await ctx.send(f"❌ No AI chat history found for session ID: `{session_id}`")
@@ -372,7 +374,7 @@ class SlashAIManagement(commands.Cog):
             await ctx.send("❌ Invalid message ID format. Please provide a valid Discord message ID.")
             return
 
-        history = self.db_helpers.get_ai_chat_history_by_message_id(message_id_int)
+        history = await self.db_helpers.get_ai_chat_history_by_message_id(message_id_int)
         
         if not history:
             await ctx.send(f"❌ No AI chat history found for message ID: `{message_id}`")

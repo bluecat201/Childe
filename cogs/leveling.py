@@ -97,8 +97,8 @@ class Leveling(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    def add_xp(self, user_id, guild_id, xp_to_add):
-        return db_helpers.update_user_xp(guild_id, user_id, xp_to_add, 1)
+    async def add_xp(self, user_id, guild_id, xp_to_add):
+        return await db_helpers.update_user_xp(guild_id, user_id, xp_to_add, 1)
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -117,7 +117,7 @@ class Leveling(commands.Cog):
             return
 
         # Add XP and check level up
-        leveled_up = self.add_xp(message.author.id, message.guild.id, random.randint(5, 10))
+        leveled_up = await self.add_xp(message.author.id, message.guild.id, random.randint(5, 10))
 
         if leveled_up:
             # Get level up channel ID

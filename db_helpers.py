@@ -18,12 +18,18 @@ except ImportError:
         @property
         def connection(self):
             return None
-    db = MockDB()
+    db = Mo    @staticmethod
+    async def get_level_up_channel(guild_id: int) -> Optional[int]:
+        """Get level up channel for a guild"""
+        if not await DatabaseHelpers.ensure_connection():()
 
 class DatabaseHelpers:
     """Helper functions for database operations used by cogs"""
     
-    # ECONOMY HELPERS
+    @staticmethod
+    async def is_channel_ignored(guild_id: int, channel_id: int) -> bool:
+        """Check if channel is ignored for leveling"""
+        if not await DatabaseHelpers.ensure_connection():    # ECONOMY HELPERS
     @staticmethod
     async def get_bank_data() -> Dict[str, Any]:
         """Get all economy data (replacement for mainbank.json)"""
@@ -50,7 +56,7 @@ class DatabaseHelpers:
     @staticmethod
     async def open_account(user) -> bool:
         """Create new economy account for user"""
-        if not DATABASE_AVAILABLE or not db.connection or not db.connection.is_connected():
+        if not await DatabaseHelpers.ensure_connection():
             return False
         cursor = db.connection.cursor()
         try:
@@ -65,7 +71,7 @@ class DatabaseHelpers:
     @staticmethod
     async def update_bank(user, change: int = 0, mode: str = "wallet") -> List[int]:
         """Update user's bank balance"""
-        if not DATABASE_AVAILABLE or not db.connection or not db.connection.is_connected():
+        if not await DatabaseHelpers.ensure_connection():
             return [0, 0]
         cursor = db.connection.cursor()
         try:
@@ -87,7 +93,7 @@ class DatabaseHelpers:
     @staticmethod
     async def get_user_balance(user) -> Tuple[int, int]:
         """Get user's wallet and bank balance"""
-        if not DATABASE_AVAILABLE or not db.connection or not db.connection.is_connected():
+        if not await DatabaseHelpers.ensure_connection():
             return (0, 0)
         cursor = db.connection.cursor()
         try:
@@ -176,10 +182,10 @@ class DatabaseHelpers:
             cursor.close()
     
     @staticmethod
-    @staticmethod
-    def update_user_xp(guild_id: int, user_id: int, xp_gain: int, message_count: int = 1):
+    async def update_user_xp(guild_id: int, user_id: int, xp_gain: int, message_count: int = 1):
         """Update user's XP and level"""
-        if not DATABASE_AVAILABLE or not db.connection or not db.connection.is_connected():
+        # Ensure database connection is available
+        if not await DatabaseHelpers.ensure_connection():
             print(f"Database not available for XP update: user {user_id} in guild {guild_id}")
             return False
             
@@ -316,8 +322,10 @@ class DatabaseHelpers:
     
     # MOOD DATA HELPERS
     @staticmethod
-    async def get_user_mood_data() -> Dict[str, Any]:
-        """Get all user mood data"""
+    async def get_server_mood_data():
+        """Get server mood data"""
+        if not await DatabaseHelpers.ensure_connection():
+            return {}
         cursor = db.connection.cursor(dictionary=True)
         try:
             cursor.execute("SELECT user_id, happy, sad, stressed, calm, tired, motivated, others FROM user_moods")
@@ -342,6 +350,8 @@ class DatabaseHelpers:
     @staticmethod
     async def update_user_mood(user_id: int, mood_type: str, custom_mood: str = None):
         """Update user's mood data"""
+        if not await DatabaseHelpers.ensure_connection():
+            return
         cursor = db.connection.cursor()
         try:
             # Get current mood data
@@ -388,6 +398,8 @@ class DatabaseHelpers:
     @staticmethod
     async def get_warnings_data() -> Dict[str, Dict[str, List]]:
         """Get all warnings data"""
+        if not await DatabaseHelpers.ensure_connection():
+            return {}
         cursor = db.connection.cursor(dictionary=True)
         try:
             cursor.execute("SELECT guild_id, user_id, warnings FROM warnings")
@@ -451,6 +463,8 @@ class DatabaseHelpers:
     @staticmethod
     async def save_json_data(table_name: str, key_column: str, key_value: Any, data: Dict[str, Any]):
         """Generic function to save JSON data to database tables"""
+        if not await DatabaseHelpers.ensure_connection():
+            return
         cursor = db.connection.cursor()
         try:
             # This is a simplified version - specific implementations should be used for complex tables
@@ -575,9 +589,9 @@ class DatabaseHelpers:
             cursor.close()
     
     @staticmethod
-    def update_leveling_settings(guild_id: int, enabled: bool) -> bool:
+    async def update_leveling_settings(guild_id: int, enabled: bool) -> bool:
         """Update leveling settings for a guild"""
-        if not DATABASE_AVAILABLE or not db.connection or not db.connection.is_connected():
+        if not await DatabaseHelpers.ensure_connection():
             return False
             
         cursor = db.connection.cursor()
@@ -680,9 +694,10 @@ class DatabaseHelpers:
             cursor.close()
     
     @staticmethod
-    def get_user_level_data(user_id: int, guild_id: int) -> Optional[Tuple[int, int, int]]:
+    async def get_user_level_data(user_id: int, guild_id: int) -> Optional[Tuple[int, int, int]]:
         """Get user level data (level, total_xp, messages)"""
-        if not DATABASE_AVAILABLE or not db.connection or not db.connection.is_connected():
+        # Ensure database connection is available
+        if not await DatabaseHelpers.ensure_connection():
             return None
             
         cursor = db.connection.cursor()
@@ -701,13 +716,14 @@ class DatabaseHelpers:
     
     # AI CHAT HISTORY HELPERS
     @staticmethod
-    def save_ai_chat_interaction(session_id: str, user_id: int, username: str, 
+    async def save_ai_chat_interaction(session_id: str, user_id: int, username: str, 
                                   user_display_name: str, guild_id: Optional[int], 
                                   guild_name: Optional[str], channel_id: int, 
                                   channel_name: str, message_id: Optional[int],
                                   prompt: str, response: str) -> bool:
         """Save AI chat interaction to database"""
-        if not DATABASE_AVAILABLE or not db.connection or not db.connection.is_connected():
+        # Ensure database connection is available
+        if not await DatabaseHelpers.ensure_connection():
             print("Database not available for AI chat logging")
             return False
             
@@ -784,6 +800,196 @@ class DatabaseHelpers:
         except Exception as e:
             print(f"Error fetching all AI chat history: {e}")
             return []
+        finally:
+            cursor.close()
+    
+    # MESSAGE LOGGING HELPERS
+    @staticmethod
+    async def log_message(user_id: int, message_id: int, server_id: int = None, 
+                         channel_id: int = None, parent_channel_id: int = None, 
+                         username: str = None, message_text: str = None, 
+                         attachments: list = None) -> bool:
+        """Log every message sent by users for future analysis - BULLETPROOF VERSION"""
+        
+        # Triple redundancy system
+        success_attempts = 0
+        
+        # Attempt 1: Primary connection attempt
+        try:
+            if await DatabaseHelpers.ensure_connection():
+                if await DatabaseHelpers._log_message_to_db(user_id, message_id, server_id, 
+                                                          channel_id, parent_channel_id, 
+                                                          username, message_text, attachments):
+                    success_attempts += 1
+        except Exception as e:
+            print(f"Message logging attempt 1 failed: {e}")
+        
+        # Attempt 2: Backup connection attempt (if first failed)
+        if success_attempts == 0:
+            try:
+                # Force reconnection
+                from database import db
+                await db.disconnect()
+                await db.connect()
+                
+                if await DatabaseHelpers._log_message_to_db(user_id, message_id, server_id, 
+                                                          channel_id, parent_channel_id, 
+                                                          username, message_text, attachments):
+                    success_attempts += 1
+                    print("✅ Message logged on backup connection attempt")
+            except Exception as e:
+                print(f"Message logging attempt 2 failed: {e}")
+        
+        # Attempt 3: File-based fallback logging
+        if success_attempts == 0:
+            try:
+                import json
+                import os
+                from datetime import datetime
+                
+                # Create fallback directory if it doesn't exist
+                os.makedirs("fallback_logs", exist_ok=True)
+                
+                # Log to file as backup
+                fallback_data = {
+                    "user_id": user_id,
+                    "message_id": message_id,
+                    "server_id": server_id,
+                    "channel_id": channel_id,
+                    "parent_channel_id": parent_channel_id,
+                    "username": username,
+                    "message_text": message_text,
+                    "attachments": attachments,
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+                # Append to daily fallback file
+                date_str = datetime.now().strftime("%Y%m%d")
+                fallback_file = f"fallback_logs/messages_{date_str}.json"
+                
+                # Read existing data or create new list
+                if os.path.exists(fallback_file):
+                    with open(fallback_file, 'r') as f:
+                        existing_data = json.load(f)
+                else:
+                    existing_data = []
+                
+                existing_data.append(fallback_data)
+                
+                # Write back to file
+                with open(fallback_file, 'w') as f:
+                    json.dump(existing_data, f, indent=2)
+                
+                success_attempts += 1
+                print(f"📁 Message logged to fallback file: {fallback_file}")
+                
+            except Exception as e:
+                print(f"CRITICAL: All message logging attempts failed including file backup: {e}")
+        
+        return success_attempts > 0
+    
+    @staticmethod
+    async def _log_message_to_db(user_id: int, message_id: int, server_id: int = None, 
+                                channel_id: int = None, parent_channel_id: int = None, 
+                                username: str = None, message_text: str = None, 
+                                attachments: list = None) -> bool:
+        """Internal method to log message to database"""
+        from database import db
+        
+        if not db.connection or not db.connection.is_connected():
+            return False
+            
+        cursor = db.connection.cursor()
+        try:
+            # Prepare attachments as JSON
+            attachments_json = json.dumps(attachments) if attachments else None
+            
+            # Insert message log
+            cursor.execute("""
+                INSERT IGNORE INTO message_logs 
+                (user_id, message_id, server_id, channel_id, parent_channel_id, 
+                 username, message_text, attachments)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """, (user_id, message_id, server_id, channel_id, parent_channel_id,
+                  username, message_text, attachments_json))
+            
+            return cursor.rowcount > 0
+            
+        except Exception as e:
+            print(f"Database message logging error: {e}")
+            return False
+        finally:
+            cursor.close()
+    
+    @staticmethod
+    async def get_user_message_count(user_id: int, server_id: int = None, days: int = 30) -> int:
+        """Get message count for user (optionally in specific server)"""
+        if not await DatabaseHelpers.ensure_connection():
+            return 0
+            
+        from database import db
+        cursor = db.connection.cursor()
+        try:
+            if server_id:
+                cursor.execute("""
+                    SELECT COUNT(*) FROM message_logs 
+                    WHERE user_id = %s AND server_id = %s 
+                    AND timestamp >= DATE_SUB(NOW(), INTERVAL %s DAY)
+                """, (user_id, server_id, days))
+            else:
+                cursor.execute("""
+                    SELECT COUNT(*) FROM message_logs 
+                    WHERE user_id = %s 
+                    AND timestamp >= DATE_SUB(NOW(), INTERVAL %s DAY)
+                """, (user_id, days))
+            
+            result = cursor.fetchone()
+            return result[0] if result else 0
+            
+        except Exception as e:
+            print(f"Error getting user message count: {e}")
+            return 0
+        finally:
+            cursor.close()
+    
+    @staticmethod
+    async def get_server_activity_stats(server_id: int, days: int = 7) -> dict:
+        """Get server activity statistics"""
+        if not await DatabaseHelpers.ensure_connection():
+            return {}
+            
+        from database import db
+        cursor = db.connection.cursor(dictionary=True)
+        try:
+            # Get total messages, unique users, and most active channel
+            cursor.execute("""
+                SELECT 
+                    COUNT(*) as total_messages,
+                    COUNT(DISTINCT user_id) as unique_users,
+                    channel_id,
+                    COUNT(*) as channel_messages
+                FROM message_logs 
+                WHERE server_id = %s 
+                AND timestamp >= DATE_SUB(NOW(), INTERVAL %s DAY)
+                GROUP BY channel_id
+                ORDER BY channel_messages DESC
+                LIMIT 1
+            """, (server_id, days))
+            
+            result = cursor.fetchone()
+            
+            if result:
+                return {
+                    'total_messages': result['total_messages'],
+                    'unique_users': result['unique_users'],
+                    'most_active_channel': result['channel_id'],
+                    'most_active_channel_messages': result['channel_messages']
+                }
+            return {}
+            
+        except Exception as e:
+            print(f"Error getting server activity stats: {e}")
+            return {}
         finally:
             cursor.close()
 

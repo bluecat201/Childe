@@ -238,7 +238,7 @@ async def on_message(message):
         
         # Save to database with message ID
         from db_helpers import db_helpers
-        db_helpers.save_ai_chat_interaction(
+        await db_helpers.save_ai_chat_interaction(
             session_id=random_chars,
             user_id=message.author.id,
             username=str(message.author),

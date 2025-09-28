@@ -238,6 +238,29 @@ class DatabaseManager:
                 )
             """)
             
+            # Message Logging table - Log EVERY message for future analysis
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS message_logs (
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                    user_id BIGINT NOT NULL,
+                    message_id BIGINT NOT NULL UNIQUE,
+                    server_id BIGINT,
+                    channel_id BIGINT NOT NULL,
+                    parent_channel_id BIGINT,
+                    username VARCHAR(255) NOT NULL,
+                    message_text TEXT,
+                    attachments JSON,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_user_id (user_id),
+                    INDEX idx_server_id (server_id),
+                    INDEX idx_channel_id (channel_id),
+                    INDEX idx_parent_channel_id (parent_channel_id),
+                    INDEX idx_timestamp (timestamp),
+                    INDEX idx_message_id (message_id),
+                    INDEX idx_username (username)
+                )
+            """)
+            
             # Migration status table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS migration_status (
