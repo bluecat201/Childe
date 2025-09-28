@@ -52,8 +52,10 @@ class SlashAIManagement(commands.Cog):
                 return
                 
             try:
-            history = await self.db_helpers.get_ai_chat_history_by_session(session_id)
-        except Exception as e:
+                history = await self.db_helpers.get_ai_chat_history_by_session(session_id)
+            except Exception as e:
+                await interaction.response.send_message(f"❌ Error fetching AI chat history: {e}", ephemeral=True)
+                return
             
             if not history:
                 await interaction.response.send_message(f"❌ No AI chat history found for session ID: `{session_id}`", ephemeral=True)
