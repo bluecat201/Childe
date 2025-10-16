@@ -12,7 +12,7 @@ import aiofiles
 import requests
 import subprocess
 from datetime import datetime
-from chatbot_ai import ChatSession
+from chatbot_ai import ChatSession, ChatbotAPI
 from config import config
 from db_helpers import db_helpers
 from database import db
@@ -90,6 +90,10 @@ class CustomBot(commands.Bot):
                 print(f"Synced {len(synced_commands)} commands to guild: {guild.name}")
             except Exception as e:
                 print(f"Error syncing commands to {guild.name}: {e}")
+
+# Initialize AI chatbot before bot creation
+chat_session = ChatSession()
+chatbot_api = ChatbotAPI()
 
 bot = CustomBot()
 # Make chatbot API accessible to cogs
@@ -175,9 +179,6 @@ async def twitch(ctx):
     await ctx.send("Here is developer twitch channel: https://www.twitch.tv/bluecat201")
 
 # --- AI Chatbot ---
-from chatbot_ai import ChatbotAPI
-chat_session = ChatSession()
-chatbot_api = ChatbotAPI()
 
 async def log_ai_interaction(user, guild, channel, prompt, response, session_id):
     """Log AI chatbot interactions to a file"""
