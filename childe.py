@@ -12,8 +12,7 @@ import aiofiles
 import requests
 import subprocess
 from datetime import datetime
-# from gemini_api import ChatSession
-from perplexity_api import ChatSession
+from chatbot_ai import ChatSession
 from config import config
 from db_helpers import db_helpers
 from database import db
@@ -93,6 +92,8 @@ class CustomBot(commands.Bot):
                 print(f"Error syncing commands to {guild.name}: {e}")
 
 bot = CustomBot()
+# Make chatbot API accessible to cogs
+bot.chatbot_api = chatbot_api
 
 async def sync_commands(bot_instance):
     """Sync commands globally and to all guilds"""
@@ -174,7 +175,9 @@ async def twitch(ctx):
     await ctx.send("Here is developer twitch channel: https://www.twitch.tv/bluecat201")
 
 # --- AI Chatbot ---
+from chatbot_ai import ChatbotAPI
 chat_session = ChatSession()
+chatbot_api = ChatbotAPI()
 
 async def log_ai_interaction(user, guild, channel, prompt, response, session_id):
     """Log AI chatbot interactions to a file"""
@@ -231,39 +234,49 @@ async def on_message(message):
         # Handle mentions in different formats
         query = query.replace(f"<@{bot.user.id}>", "").strip()
         
+        # Skip empty queries
+        if not query:
+            query = "Hello!"
+        
         async with message.channel.typing():
+            # Prepare user context for better AI responses
+            user_context = {
+                "username": message.author.display_name,
+                "guild_name": message.guild.name if message.guild else "DM",
+                "channel_name": message.channel.name if hasattr(message.channel, 'name') else str(message.channel)
+            }
+            
             # Try up to 2 times to get a response
             response = None
             max_attempts = 2
             
             for attempt in range(max_attempts):
                 try:
+                    # Use the ChatSession which wraps the new API
                     response = await chat_session.send_message(query)
-                    if response:  # If we got a valid response, break out of retry loop
-                        break
+                    
+                    # Check if response indicates an error from the API
+                    if response and not any(error_indicator in response.lower() for error_indicator in 
+                                          ["api error", "authentication failed", "network error", "service temporarily unavailable"]):
+                        break  # Got a valid response
+                    elif response:
+                        print(f"AI API returned error: {response}")
                 except Exception as e:
-                    error_msg = str(e).lower()
                     print(f"AI attempt {attempt + 1} failed: {e}")
-                    
-                    # Check for specific Perplexity errors
-                    if "choices" in error_msg or "parsing" in error_msg:
-                        print(f"Detected Perplexity parsing error, attempt {attempt + 1}/{max_attempts}")
-                        if attempt < max_attempts - 1:  # Not the last attempt
-                            await asyncio.sleep(1)  # Wait 1 second before retry
-                            continue
-                    
-                    # If this is the last attempt or other error, break
-                    if attempt == max_attempts - 1:
-                        break
+                
+                # Wait before retry if not the last attempt
+                if attempt < max_attempts - 1:
+                    await asyncio.sleep(1)
             
             # If no response after all attempts, use fallback
-            if not response:
-                response = "Mám krámy."
+            if not response or any(error_indicator in response.lower() for error_indicator in 
+                                 ["api error", "authentication failed", "network error", "service temporarily unavailable"]):
+                response = "Mám krámy. (AI service is currently unavailable)"
                 print("AI failed after all attempts, using fallback message")
         
         # Generate random 8 characters
         random_chars = ''.join(random.choices('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', k=8))
-        response_with_footer = f"{response}\n-# Generated on sidet.eu API v1.1 PREVIEW | #{random_chars}"
+        response_with_footer = f"{response}\n-# Generated on sidet.eu API v1.3.2 | #{random_chars}"
         
         # Send reply and get message object
         reply_message = await message.reply(response_with_footer)

@@ -426,6 +426,300 @@ class SlashAIManagement(commands.Cog):
         
         await ctx.send(embed=embed)
 
+    @ai.command(name="model", description="Change or view the current AI model")
+    @app_commands.describe(
+        action="View current model or set a new one",
+        model="The AI model to use"
+    )
+    @app_commands.choices(
+        action=[
+            app_commands.Choice(name="view", value="view"),
+            app_commands.Choice(name="set", value="set"),
+            app_commands.Choice(name="list", value="list")
+        ],
+        model=[
+            app_commands.Choice(name="gemini-2.5-flash (Fastest)", value="gemini-2.5-flash"),
+            app_commands.Choice(name="gemini-2.5-pro (Best reasoning)", value="gemini-2.5-pro"),
+            app_commands.Choice(name="gemini-2.0-flash (Alternative)", value="gemini-2.0-flash"),
+            app_commands.Choice(name="gemini-flash (Alias for 2.5-flash)", value="gemini-flash"),
+            app_commands.Choice(name="gemini-pro (Alias for 2.5-pro)", value="gemini-pro")
+        ]
+    )
+    async def ai_model(self, interaction: discord.Interaction, action: str, model: str = None):
+        if not self.is_owner_or_co_owner(interaction.user.id):
+            await interaction.response.send_message("❌ This command is restricted to bot owners only.", ephemeral=True)
+            return
+
+        # Import here to avoid circular imports
+        from chatbot_ai import ChatbotAPI
+        
+        try:
+            # Get the chatbot instance from the main bot
+            chatbot = getattr(self.bot, 'chatbot_api', None)
+            if not chatbot:
+                # Create a temporary instance to check models
+                chatbot = ChatbotAPI()
+
+            if action == "view":
+                current_model = chatbot.model
+                model_info = chatbot.get_model_info(current_model)
+                personality = chatbot.get_current_token_personality()
+                
+                embed = discord.Embed(
+                    title="🤖 Current AI Configuration",
+                    color=0x00d4aa
+                )
+                embed.add_field(
+                    name="Current Model",
+                    value=f"**{current_model}**\n{model_info['description']}",
+                    inline=False
+                )
+                embed.add_field(
+                    name="Speed & Capability",
+                    value=f"Speed: {model_info['speed']}\nCapability: {model_info['capability']}",
+                    inline=True
+                )
+                embed.add_field(
+                    name="Current Personality",
+                    value=personality,
+                    inline=False
+                )
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                
+            elif action == "list":
+                models = chatbot.get_available_models()
+                embed = discord.Embed(
+                    title="🤖 Available AI Models",
+                    color=0x00d4aa
+                )
+                
+                for available_model in models:
+                    info = chatbot.get_model_info(available_model)
+                    embed.add_field(
+                        name=available_model,
+                        value=f"{info['description']}\n{info['speed']} | {info['capability']}",
+                        inline=True
+                    )
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                
+            elif action == "set":
+                if not model:
+                    await interaction.response.send_message("❌ Please specify a model to set.", ephemeral=True)
+                    return
+                
+                success = chatbot.set_model(model)
+                if success:
+                    model_info = chatbot.get_model_info(model)
+                    embed = discord.Embed(
+                        title="✅ AI Model Updated",
+                        description=f"Successfully changed to **{model}**",
+                        color=0x00ff00
+                    )
+                    embed.add_field(
+                        name="Model Info",
+                        value=f"{model_info['description']}\n{model_info['speed']} | {model_info['capability']}",
+                        inline=False
+                    )
+                    await interaction.response.send_message(embed=embed, ephemeral=True)
+                else:
+                    await interaction.response.send_message(f"❌ Invalid model: `{model}`", ephemeral=True)
+                    
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Error managing AI model: {e}", ephemeral=True)
+
+    @ai.command(name="token", description="Change or view the current AI token/personality")
+    @app_commands.describe(
+        action="View current token or set a new one",
+        token="The AI token to use (changes personality)"
+    )
+    @app_commands.choices(
+        action=[
+            app_commands.Choice(name="view", value="view"),
+            app_commands.Choice(name="set", value="set")
+        ],
+        token=[
+            app_commands.Choice(name="test123 (Alex - Friendly)", value="test123"),
+            app_commands.Choice(name="demo456 (Professor Minerva - Scholarly)", value="demo456"),
+            app_commands.Choice(name="admin789 (Codex - Technical)", value="admin789")
+        ]
+    )
+    async def ai_token(self, interaction: discord.Interaction, action: str, token: str = None):
+        if not self.is_owner_or_co_owner(interaction.user.id):
+            await interaction.response.send_message("❌ This command is restricted to bot owners only.", ephemeral=True)
+            return
+
+        # Import here to avoid circular imports
+        from chatbot_ai import ChatbotAPI
+        
+        try:
+            # Get the chatbot instance from the main bot
+            chatbot = getattr(self.bot, 'chatbot_api', None)
+            if not chatbot:
+                # Create a temporary instance
+                chatbot = ChatbotAPI()
+
+            if action == "view":
+                current_token = chatbot.token
+                personality = chatbot.get_current_token_personality()
+                
+                embed = discord.Embed(
+                    title="🎭 Current AI Personality",
+                    color=0x00d4aa
+                )
+                embed.add_field(
+                    name="Current Token",
+                    value=f"`{current_token}`",
+                    inline=True
+                )
+                embed.add_field(
+                    name="Personality",
+                    value=personality,
+                    inline=False
+                )
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                
+            elif action == "set":
+                if not token:
+                    await interaction.response.send_message("❌ Please specify a token to set.", ephemeral=True)
+                    return
+                
+                old_token = chatbot.token
+                chatbot.set_token(token)
+                new_personality = chatbot.get_current_token_personality()
+                
+                embed = discord.Embed(
+                    title="✅ AI Token/Personality Updated",
+                    description=f"Successfully changed from `{old_token}` to `{token}`",
+                    color=0x00ff00
+                )
+                embed.add_field(
+                    name="New Personality",
+                    value=new_personality,
+                    inline=False
+                )
+                embed.add_field(
+                    name="⚠️ Note",
+                    value="Conversation history has been cleared as each token maintains separate memory.",
+                    inline=False
+                )
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                    
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Error managing AI token: {e}", ephemeral=True)
+
+    @ai.command(name="reset", description="Reset AI conversation history")
+    async def ai_reset(self, interaction: discord.Interaction):
+        if not self.is_owner_or_co_owner(interaction.user.id):
+            await interaction.response.send_message("❌ This command is restricted to bot owners only.", ephemeral=True)
+            return
+
+        try:
+            # Import here to avoid circular imports
+            from chatbot_ai import ChatbotAPI
+            
+            # Get the chatbot instance from the main bot
+            chatbot = getattr(self.bot, 'chatbot_api', None)
+            if not chatbot:
+                await interaction.response.send_message("❌ Chatbot not initialized.", ephemeral=True)
+                return
+
+            chatbot.clear_history()
+            
+            embed = discord.Embed(
+                title="✅ AI History Reset",
+                description="Local conversation history has been cleared.",
+                color=0x00ff00
+            )
+            embed.add_field(
+                name="ℹ️ Note",
+                value="The API server still maintains its own conversation history per token. This only clears the local cache.",
+                inline=False
+            )
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+                    
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Error resetting AI history: {e}", ephemeral=True)
+
+    @ai.command(name="status", description="View AI system status and information")
+    async def ai_status(self, interaction: discord.Interaction):
+        if not self.is_owner_or_co_owner(interaction.user.id):
+            await interaction.response.send_message("❌ This command is restricted to bot owners only.", ephemeral=True)
+            return
+
+        try:
+            # Import here to avoid circular imports
+            from chatbot_ai import ChatbotAPI
+            import aiohttp
+            
+            # Get the chatbot instance from the main bot
+            chatbot = getattr(self.bot, 'chatbot_api', None)
+            if not chatbot:
+                # Create a temporary instance
+                chatbot = ChatbotAPI()
+
+            # Test API connectivity
+            try:
+                async with aiohttp.ClientSession() as session:
+                    test_payload = {"prompt": "Hello", "model": "gemini-2.5-flash"}
+                    test_headers = {"Content-Type": "application/json", "Authorization": f"sideteu {chatbot.token}"}
+                    
+                    async with session.post(chatbot.api_url, json=test_payload, headers=test_headers, timeout=5) as response:
+                        api_status = "🟢 Online" if response.status == 200 else f"🔴 Error (HTTP {response.status})"
+            except Exception as e:
+                api_status = f"🔴 Offline ({str(e)[:50]}...)"
+
+            embed = discord.Embed(
+                title="🤖 AI System Status",
+                color=0x00d4aa,
+                timestamp=datetime.now()
+            )
+            
+            embed.add_field(
+                name="API Status",
+                value=api_status,
+                inline=True
+            )
+            
+            embed.add_field(
+                name="Current Model",
+                value=chatbot.model,
+                inline=True
+            )
+            
+            embed.add_field(
+                name="Current Token",
+                value=f"`{chatbot.token}`",
+                inline=True
+            )
+            
+            embed.add_field(
+                name="Personality",
+                value=chatbot.get_current_token_personality(),
+                inline=False
+            )
+            
+            embed.add_field(
+                name="Local History",
+                value=f"{len(chatbot.history)} conversations cached",
+                inline=True
+            )
+            
+            embed.add_field(
+                name="API Endpoint",
+                value=chatbot.api_url,
+                inline=False
+            )
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+                    
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Error getting AI status: {e}", ephemeral=True)
+
     # Simple test slash command to verify the cog is working
     @app_commands.command(name="ai_test", description="Test if AI management cog is working (Owner only)")
     async def ai_test(self, interaction: discord.Interaction):
@@ -433,7 +727,7 @@ class SlashAIManagement(commands.Cog):
             await interaction.response.send_message("❌ This command is restricted to bot owners only.", ephemeral=True)
             return
         
-        await interaction.response.send_message("✅ AI Management cog is working! The `/ai history` command should be available.", ephemeral=True)
+        await interaction.response.send_message("✅ AI Management cog is working! The `/ai` command group should be available with new API management features.", ephemeral=True)
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(SlashAIManagement(bot))
