@@ -13,6 +13,7 @@ import requests
 import subprocess
 from datetime import datetime
 from chatbot_ai import ChatSession, ChatbotAPI
+from uptime_monitor import uptime_monitor
 from config import config
 from db_helpers import db_helpers
 from database import db
@@ -31,7 +32,7 @@ def get_version():
     except Exception:
         return "Unknown Version"
 
-CURRENT_VERSION = "Beta 0.4.5"
+CURRENT_VERSION = "Beta 0.4.6"
 
 async def determine_prefix(bot, message):
     if not message.guild:
@@ -444,6 +445,10 @@ async def on_ready():
         await channel.send(embed=embed)
     else:
         print(f'Channel with ID {channel_id} not found.')
+    
+    # Start uptime monitoring
+    print("Starting uptime monitoring...")
+    await uptime_monitor.start_monitoring()
 
 @bot.event
 async def on_member_join(member):
@@ -474,6 +479,12 @@ async def on_guild_role_delete(role):
     print(f'Role {role} was deleted on [{server}]')
 
 @bot.event
+async def on_disconnect():
+    print("Bot disconnecting...")
+    # Stop uptime monitoring
+    await uptime_monitor.stop_monitoring()
+
+@bot.event
 async def on_guild_role_update(before,after):
     server = str(before.guild.name)
     print(f'Role {before} was changed to {after} on {server}')
@@ -495,8 +506,27 @@ async def on_message_delete(message):
     print(f'Message "{zprava}" by {username} in {channel} on {server} was deleted')
 
 # --- TOKEN LOAD & RUN ---
-with open("config.json", "r") as file:
-    config = json.load(file)
-    TOKEN = config["token"]
+async def main():
+    """Main function to run the bot with proper cleanup"""
+    try:
+        with open("config.json", "r") as file:
+            config_data = json.load(file)
+            TOKEN = config_data["bot"]["token"]
+        
+        # Start the bot
+        await bot.start(TOKEN)
+    except KeyboardInterrupt:
+        print("Received keyboard interrupt, shutting down...")
+    except Exception as e:
+        print(f"Bot encountered an error: {e}")
+    finally:
+        # Ensure uptime monitoring is stopped
+        print("Cleaning up...")
+        await uptime_monitor.stop_monitoring()
+        await bot.close()
 
-bot.run(TOKEN)
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("Bot shutdown complete.")

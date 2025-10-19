@@ -720,6 +720,142 @@ class SlashAIManagement(commands.Cog):
         except Exception as e:
             await interaction.response.send_message(f"❌ Error getting AI status: {e}", ephemeral=True)
 
+    @ai.command(name="uptime", description="View and manage uptime monitoring")
+    @app_commands.describe(
+        action="View status, start, stop, or reload config"
+    )
+    @app_commands.choices(action=[
+        app_commands.Choice(name="status", value="status"),
+        app_commands.Choice(name="start", value="start"),
+        app_commands.Choice(name="stop", value="stop"),
+        app_commands.Choice(name="reload", value="reload"),
+        app_commands.Choice(name="test", value="test")
+    ])
+    async def ai_uptime(self, interaction: discord.Interaction, action: str):
+        if not self.is_owner_or_co_owner(interaction.user.id):
+            await interaction.response.send_message("❌ This command is restricted to bot owners only.", ephemeral=True)
+            return
+
+        try:
+            # Import here to avoid circular imports
+            from uptime_monitor import uptime_monitor
+            
+            if action == "status":
+                status = uptime_monitor.get_status()
+                
+                embed = discord.Embed(
+                    title="📊 Uptime Monitoring Status",
+                    color=0x00d4aa if status['enabled'] else 0xff9900,
+                    timestamp=datetime.now()
+                )
+                
+                # Status overview
+                status_emoji = "🟢" if status['running'] else ("🟡" if status['enabled'] else "🔴")
+                embed.add_field(
+                    name="Status",
+                    value=f"{status_emoji} {'Running' if status['running'] else ('Enabled but stopped' if status['enabled'] else 'Disabled')}",
+                    inline=True
+                )
+                
+                embed.add_field(
+                    name="Configuration",
+                    value=f"**Enabled:** {status['enabled']}\n**Push URL:** {'✅ Configured' if status['push_url_configured'] else '❌ Not configured'}\n**Interval:** {status['interval_minutes']} minute(s)",
+                    inline=True
+                )
+                
+                embed.add_field(
+                    name="Statistics",
+                    value=f"**Ping Count:** {status['ping_count']}\n**Last Ping:** {status['last_ping_time'] or 'Never'}\n**Last Error:** {status['last_error'] or 'None'}",
+                    inline=False
+                )
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                
+            elif action == "start":
+                if uptime_monitor.running:
+                    await interaction.response.send_message("📊 Uptime monitoring is already running.", ephemeral=True)
+                else:
+                    await uptime_monitor.start_monitoring()
+                    status = uptime_monitor.get_status()
+                    if status['running']:
+                        await interaction.response.send_message("✅ Uptime monitoring started successfully.", ephemeral=True)
+                    else:
+                        await interaction.response.send_message("❌ Failed to start uptime monitoring. Check configuration.", ephemeral=True)
+                
+            elif action == "stop":
+                if not uptime_monitor.running:
+                    await interaction.response.send_message("📊 Uptime monitoring is not running.", ephemeral=True)
+                else:
+                    await uptime_monitor.stop_monitoring()
+                    await interaction.response.send_message("⏹️ Uptime monitoring stopped.", ephemeral=True)
+                
+            elif action == "reload":
+                old_status = uptime_monitor.get_status()
+                was_running = old_status['running']
+                
+                # Stop if running
+                if was_running:
+                    await uptime_monitor.stop_monitoring()
+                
+                # Reload config
+                uptime_monitor.reload_config()
+                new_status = uptime_monitor.get_status()
+                
+                # Restart if it was running and still enabled
+                if was_running and new_status['enabled']:
+                    await uptime_monitor.start_monitoring()
+                
+                embed = discord.Embed(
+                    title="🔄 Uptime Monitoring Config Reloaded",
+                    color=0x00ff00
+                )
+                embed.add_field(
+                    name="Status",
+                    value=f"**Enabled:** {old_status['enabled']} → {new_status['enabled']}\n**Running:** {was_running} → {new_status['running']}\n**URL Configured:** {new_status['push_url_configured']}",
+                    inline=False
+                )
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                
+            elif action == "test":
+                if not uptime_monitor.enabled:
+                    await interaction.response.send_message("❌ Uptime monitoring is disabled.", ephemeral=True)
+                    return
+                
+                await interaction.response.defer(ephemeral=True)
+                
+                old_count = uptime_monitor.ping_count
+                await uptime_monitor._send_ping()
+                new_count = uptime_monitor.ping_count
+                
+                if new_count > old_count:
+                    embed = discord.Embed(
+                        title="✅ Test Ping Sent",
+                        description="Successfully sent a test ping to the uptime monitoring service.",
+                        color=0x00ff00
+                    )
+                    embed.add_field(
+                        name="Result",
+                        value=f"**Ping Count:** {new_count}\n**Last Error:** {uptime_monitor.last_error or 'None'}",
+                        inline=False
+                    )
+                else:
+                    embed = discord.Embed(
+                        title="❌ Test Ping Failed", 
+                        description="Failed to send test ping.",
+                        color=0xff0000
+                    )
+                    embed.add_field(
+                        name="Error",
+                        value=uptime_monitor.last_error or "Unknown error",
+                        inline=False
+                    )
+                
+                await interaction.followup.send(embed=embed, ephemeral=True)
+                    
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Error managing uptime monitoring: {e}", ephemeral=True)
+
     # Simple test slash command to verify the cog is working
     @app_commands.command(name="ai_test", description="Test if AI management cog is working (Owner only)")
     async def ai_test(self, interaction: discord.Interaction):
