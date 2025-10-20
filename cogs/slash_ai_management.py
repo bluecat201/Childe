@@ -769,6 +769,14 @@ class SlashAIManagement(commands.Cog):
                     inline=False
                 )
                 
+                # Add session info
+                session_status = "🟢 Active" if status['session_active'] else "🔴 Inactive"
+                embed.add_field(
+                    name="Connection",
+                    value=f"**HTTP Session:** {session_status}\n**Reconnects:** {status['session_reconnects']}",
+                    inline=True
+                )
+                
                 await interaction.response.send_message(embed=embed, ephemeral=True)
                 
             elif action == "start":

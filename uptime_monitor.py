@@ -27,9 +27,23 @@ class UptimeMonitor:
         self.ping_count = 0
         self.last_ping_time = None
         self.last_error = None
+        self.session = None  # Persistent aiohttp session
+        self.session_reconnects = 0  # Track session reconnections
         
         # Load configuration
         self._load_config()
+    
+    def __del__(self):
+        """Cleanup when object is destroyed"""
+        if self.session and not self.session.closed:
+            # Note: We can't use await in __del__, so we schedule the cleanup
+            try:
+                import asyncio
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.create_task(self._close_session())
+            except:
+                pass  # Ignore errors during cleanup
     
     def _load_config(self):
         """Load configuration from config.json"""
@@ -68,6 +82,9 @@ class UptimeMonitor:
         print(f"📊 Starting uptime monitoring - pinging every {self.interval_minutes} minute(s)")
         print(f"📊 Push URL: {self.push_url[:50]}{'...' if len(self.push_url) > 50 else ''}")
         
+        # Create persistent session
+        await self._create_session()
+        
         self.running = True
         self.task = asyncio.create_task(self._monitoring_loop())
     
@@ -86,7 +103,59 @@ class UptimeMonitor:
             except asyncio.CancelledError:
                 pass
         
+        # Close persistent session
+        await self._close_session()
+        
         print(f"📊 Uptime monitoring stopped after {self.ping_count} pings")
+    
+    async def _create_session(self):
+        """Create a new aiohttp session"""
+        if self.session and not self.session.closed:
+            await self._close_session()
+        
+        try:
+            # Create session with optimized settings for uptime monitoring
+            timeout = aiohttp.ClientTimeout(total=self.timeout_seconds)
+            connector = aiohttp.TCPConnector(
+                limit=2,  # Limit connections since we only need one
+                ttl_dns_cache=300,  # DNS cache for 5 minutes
+                use_dns_cache=True,
+                keepalive_timeout=60,
+                enable_cleanup_closed=True
+            )
+            
+            self.session = aiohttp.ClientSession(
+                timeout=timeout,
+                connector=connector,
+                headers={
+                    'User-Agent': 'Discord-Bot-Uptime-Monitor/1.0'
+                }
+            )
+            
+            if self.session_reconnects > 0:
+                print(f"📊 Created new HTTP session (reconnection #{self.session_reconnects})")
+            
+        except Exception as e:
+            print(f"📊 Failed to create HTTP session: {e}")
+            self.session = None
+    
+    async def _close_session(self):
+        """Close the current aiohttp session"""
+        if self.session and not self.session.closed:
+            try:
+                await self.session.close()
+            except Exception as e:
+                print(f"📊 Error closing HTTP session: {e}")
+            finally:
+                self.session = None
+    
+    async def _ensure_session(self):
+        """Ensure we have a valid session, create new one if needed"""
+        if not self.session or self.session.closed:
+            self.session_reconnects += 1
+            await self._create_session()
+            return True  # Session was recreated
+        return False  # Session was already valid
     
     async def _monitoring_loop(self):
         """Main monitoring loop that sends periodic pings"""
@@ -105,25 +174,33 @@ class UptimeMonitor:
         if not self.enabled or not self.push_url:
             return
         
+        # Ensure we have a valid session
+        session_recreated = await self._ensure_session()
+        
+        if not self.session:
+            self.ping_count += 1
+            error_msg = "No HTTP session available"
+            print(f"📊 Uptime ping #{self.ping_count} failed: {error_msg}")
+            self.last_error = error_msg
+            return
+        
         try:
-            async with aiohttp.ClientSession() as session:
-                # Send GET request to push URL
-                async with session.get(
-                    self.push_url,
-                    timeout=aiohttp.ClientTimeout(total=self.timeout_seconds)
-                ) as response:
-                    
-                    self.ping_count += 1
-                    self.last_ping_time = datetime.now()
-                    
-                    if response.status == 200:
-                        response_text = await response.text()
-                        if self.ping_count % 10 == 0:  # Log every 10th ping to avoid spam
-                            print(f"📊 Uptime ping #{self.ping_count} successful: {response_text.strip()}")
-                    else:
-                        error_msg = f"HTTP {response.status}"
-                        print(f"📊 Uptime ping #{self.ping_count} failed: {error_msg}")
-                        self.last_error = error_msg
+            # Send GET request to push URL using persistent session
+            async with self.session.get(self.push_url) as response:
+                self.ping_count += 1
+                self.last_ping_time = datetime.now()
+                
+                if response.status == 200:
+                    response_text = await response.text()
+                    # Log every 10th ping or when session was recreated
+                    if self.ping_count % 10 == 0 or session_recreated:
+                        reconnect_info = f" (after reconnect #{self.session_reconnects})" if session_recreated else ""
+                        print(f"📊 Uptime ping #{self.ping_count} successful{reconnect_info}: {response_text.strip()}")
+                    self.last_error = None  # Clear error on success
+                else:
+                    error_msg = f"HTTP {response.status}"
+                    print(f"📊 Uptime ping #{self.ping_count} failed: {error_msg}")
+                    self.last_error = error_msg
                         
         except asyncio.TimeoutError:
             self.ping_count += 1
@@ -136,6 +213,11 @@ class UptimeMonitor:
             error_msg = f"Network error: {str(e)}"
             print(f"📊 Uptime ping #{self.ping_count} failed: {error_msg}")
             self.last_error = error_msg
+            
+            # If it's a connection error, mark session for recreation
+            if isinstance(e, (aiohttp.ClientConnectionError, aiohttp.ClientConnectorError)):
+                print(f"📊 Connection error detected, will recreate session on next ping")
+                await self._close_session()
             
         except Exception as e:
             self.ping_count += 1
@@ -152,7 +234,9 @@ class UptimeMonitor:
             "last_ping_time": self.last_ping_time.isoformat() if self.last_ping_time else None,
             "last_error": self.last_error,
             "interval_minutes": self.interval_minutes,
-            "push_url_configured": bool(self.push_url and "YOUR_PUSH_KEY" not in self.push_url)
+            "push_url_configured": bool(self.push_url and "YOUR_PUSH_KEY" not in self.push_url),
+            "session_active": bool(self.session and not self.session.closed),
+            "session_reconnects": self.session_reconnects
         }
     
     def reload_config(self):
@@ -180,11 +264,21 @@ async def test_uptime_monitor():
     print(f"Enabled: {status['enabled']}")
     print(f"Push URL configured: {status['push_url_configured']}")
     print(f"Interval: {status['interval_minutes']} minutes")
+    print(f"Session active: {status['session_active']}")
     
     if status['enabled'] and status['push_url_configured']:
-        print("Sending test ping...")
+        print("Creating session and sending test ping...")
+        await monitor._create_session()
+        
+        print(f"Session created: {monitor.session is not None}")
+        
         await monitor._send_ping()
         print(f"Test ping sent. Count: {monitor.ping_count}")
+        print(f"Reconnects: {monitor.session_reconnects}")
+        
+        # Clean up
+        await monitor._close_session()
+        print("Session closed")
     else:
         print("Uptime monitoring not properly configured")
 
